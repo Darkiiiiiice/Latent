@@ -4,6 +4,11 @@ import Security
 /// Keychain 存取（设计文档第 4 节：`service = app.latent.tmdb`，`account = read_token`）。
 ///
 /// 只存本机（不使用 iCloud 同步项）；Token 不写日志、不进数据库。
+///
+/// 说明：不使用 `kSecUseDataProtectionKeychain`——该路径要求签名带
+/// `keychain-access-groups` / `application-identifier`（即需要 Team），
+/// 自用构建是 ad-hoc 签名（`CODE_SIGN_IDENTITY = "-"`），会直接返回
+/// `errSecMissingEntitlement (-34018)`。传统登录钥匙串路径在沙箱 + ad-hoc 下可用。
 actor KeychainStore {
     static let shared = KeychainStore()
 
@@ -20,8 +25,6 @@ actor KeychainStore {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
-            // 使用数据保护钥匙串（现代 macOS 路径）
-            kSecUseDataProtectionKeychain as String: true,
         ]
     }
 
@@ -84,6 +87,15 @@ struct KeychainError: Error, Equatable, Sendable {
     let status: OSStatus
 
     var errorDescription: String {
-        "钥匙串访问失败（\(status)）"
+        switch status {
+        case errSecAuthFailed:
+            return "钥匙串访问被拒绝（\(status)）：请在系统弹窗中选择「始终允许」后重试"
+        case errSecUserCanceled:
+            return "钥匙串访问被取消（\(status)）"
+        case errSecInteractionNotAllowed:
+            return "钥匙串当前不可用（\(status)）"
+        default:
+            return "钥匙串访问失败（\(status)）"
+        }
     }
 }
