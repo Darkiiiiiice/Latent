@@ -44,16 +44,6 @@ struct PersonDetailView: View {
             .padding(.vertical, UI.Spacing.s6)
         }
         .background(UI.Palette.bg)
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button {
-                    NotificationCenter.default.post(name: AppCommandBus.back, object: nil)
-                } label: {
-                    Label("返回", systemImage: "chevron.backward")
-                }
-                .help("返回（⌘[）")
-            }
-        }
         .task(id: personID) { await load() }
     }
 

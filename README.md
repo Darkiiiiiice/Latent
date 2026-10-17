@@ -10,9 +10,9 @@ macOS 上的 TMDB 元数据浏览器：搜索电影、剧集与人物，浏览�
 
 - [`docs/设计文档.md`](docs/设计文档.md) —— 完整方案：目标与约束 / TMDB API 设计 / 架构 / 图片管线 / UI 设计系统 / 里程碑（P0–P4）/ 验收与测试
 
-已实现：引导页 + Token 验证、两栏导航（趋势 / 发现 / 收藏 / 观看清单 / 历史）、搜索浮层（防抖 + 分组 + 最近搜索）、电影 / 剧集 / 人物详情（Hero、演职员、剧照、相似推荐、季与分集）、本地库（SwiftData）、设置页（⌘,，常规 / 网络 / 缓存 / 关于）、图片管线（内存 + 磁盘 LRU + ImageIO 下采样）、响应缓存（TTL）。
+已实现：引导页 + Token 验证、两栏导航（趋势 / 发现 / 收藏 / 观看清单 / 历史）、搜索浮层（防抖 + 分组 + 最近搜索）、电影 / 剧集 / 人物详情（Hero、演职员、剧照、相似推荐、季与分集）、本地库（SwiftData）、设置页（⌘,，常规 / 网络 / 缓存 / 关于，含**网络代理**）、图片管线（内存 + 磁盘 LRU + ImageIO 下采样）、响应缓存（TTL）。
 
-测试：`xcodebuild test -project Latent.xcodeproj -scheme Latent` —— **67 项、12 个套件全绿**（Swift Testing + URLProtocol stub + fixture JSON + 内存 SwiftData 容器）。
+测试：`xcodebuild test -project Latent.xcodeproj -scheme Latent` —— **84 项、15 个套件全绿**（Swift Testing + URLProtocol stub + fixture JSON + 内存 SwiftData 容器；含真实沙箱环境下的 Keychain 用例）。
 
 ## 关键决策
 
@@ -61,5 +61,10 @@ Latent/
 1. **人工走查**：视觉 / 动效（Reduce Motion）/ 无障碍（VoiceOver、全键盘）/ 手工矩阵。
 2. 真实 Token 走通「引导 → 搜索 → 详情 → 收藏 → 重启 → 库」并记录性能基准（滚动帧率、内存）。
 3. 应用图标（当前为空占位）；窗口尺寸 / 位置恢复。
+
+## 常见问题
+
+- **国内直连不通**：`设置（⌘,）→ 网络 → 代理` 选「手动」，填 HTTP(S) 或 SOCKS5 的主机与端口（如 `127.0.0.1:7890`），改完点「重新验证」。首次启动若 shell 里有 `https_proxy`，会**自动预填**一次（从 Finder 双击启动读不到环境变量）。
+- **弹出钥匙串授权对话框**：ad-hoc 签名（自用构建）的钥匙串条目按代码签名设 ACL，少数情况下读取 Token 时会弹一次「想要使用您存储在钥匙串中的机密信息」——选「始终允许」即可。若对话框被误关，钥匙串操作会一直阻塞，可在「活动监视器」结束 `SecurityAgent` 后重试。
 
 设计文档拷贝自 Obsidian 库 `20_项目/TMDB元数据客户端/`；开发期间如有修订，先更新本仓库 `docs/设计文档.md` 并说明原因，事后回写库中。

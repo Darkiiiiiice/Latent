@@ -298,5 +298,32 @@ struct AppSettingsTests {
         let settings = AppSettings(defaults: defaults)
         #expect(settings.language == "zh-CN")
         #expect(settings.appearance == .system)
+        #expect(settings.proxy == ProxyConfiguration()) // 默认跟随系统；主机的默认值 127.0.0.1
+    }
+
+    @Test("代理：改动即持久化（下次启动仍生效）")
+    func proxyPersistence() {
+        let defaults = UserDefaults(suiteName: "latent-tests-\(UUID().uuidString)")!
+        let settings = AppSettings(defaults: defaults)
+        settings.proxy = ProxyConfiguration(mode: .manual, kind: .socks5, host: "10.0.0.5", port: 1080)
+
+        #expect(ProxyConfiguration.read(from: defaults).mode == .manual)
+        #expect(ProxyConfiguration.read(from: defaults).port == 1080)
+
+        let reloaded = AppSettings(defaults: defaults)
+        #expect(reloaded.proxy.kind == .socks5)
+        #expect(reloaded.proxy.host == "10.0.0.5")
+    }
+
+    @Test("代理：首次启动从环境变量预填，已设置过则不再覆盖")
+    func proxySeeding() {
+        let defaults = UserDefaults(suiteName: "latent-tests-\(UUID().uuidString)")!
+        let seeded = AppSettings(defaults: defaults, environment: ["https_proxy": "http://127.0.0.1:7890"])
+        #expect(seeded.proxy.mode == .manual)
+        #expect(seeded.proxy.port == 7890)
+
+        seeded.proxy = ProxyConfiguration(mode: .system) // 用户手动改回跟随系统
+        let reloaded = AppSettings(defaults: defaults, environment: ["https_proxy": "http://127.0.0.1:9999"])
+        #expect(reloaded.proxy.mode == .system) // 不再被环境变量覆盖
     }
 }

@@ -147,6 +147,46 @@ struct SettingsView: View {
             }
         }
 
+        Section("代理") {
+            Picker("模式", selection: Bindable(settings).proxy.mode) {
+                ForEach(ProxyConfiguration.Mode.allCases) { mode in
+                    Text(mode.label).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            if settings.proxy.mode == .manual {
+                Picker("类型", selection: Bindable(settings).proxy.kind) {
+                    ForEach(ProxyConfiguration.Kind.allCases) { kind in
+                        Text(kind.label).tag(kind)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                LabeledContent("主机") {
+                    TextField("127.0.0.1", text: Bindable(settings).proxy.host)
+                        .font(.system(size: 12, design: .monospaced))
+                        .frame(width: 180)
+                }
+                LabeledContent("端口") {
+                    TextField("7890", value: Bindable(settings).proxy.port, format: .number)
+                        .font(.system(size: 12, design: .monospaced))
+                        .frame(width: 80)
+                }
+            }
+
+            Label(settings.proxy.summary, systemImage: settings.proxy.isUsable || settings.proxy.mode == .system ? "arrow.triangle.branch" : "exclamationmark.triangle")
+                .font(.system(size: 12))
+                .foregroundStyle(settings.proxy.mode == .manual && !settings.proxy.isUsable ? UI.Palette.warning : UI.Palette.textSecondary)
+
+            Text("改动立即生效（无需重启），API 与图片请求都走这里；只影响本 App，不改系统设置。改完点下方「重新验证」确认连通性；不支持代理认证与 PAC。")
+                .font(.system(size: 11))
+                .foregroundStyle(UI.Palette.textSecondary)
+        }
+        .onChange(of: settings.proxy) { _, _ in
+            appEnv.connectionState = .unknown
+        }
+
         Section("连接状态") {
             HStack(spacing: UI.Spacing.s2) {
                 Circle()
@@ -159,7 +199,7 @@ struct SettingsView: View {
                 }
                 .controlSize(.small)
             }
-            Text("Token 仅存本机钥匙串；网络请求仅发往 api.themoviedb.org 与 image.tmdb.org。")
+            Text("Token 仅存本机钥匙串；网络请求仅发往 api.themoviedb.org 与 image.tmdb.org（可经代理）。")
                 .font(.system(size: 11))
                 .foregroundStyle(UI.Palette.textSecondary)
         }

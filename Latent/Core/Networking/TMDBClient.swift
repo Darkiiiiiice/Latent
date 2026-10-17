@@ -51,7 +51,7 @@ enum RetryPolicy {
 /// - 认证：v4 Read Access Token（Bearer 头），Token 不进 URL、不进日志。
 /// - 缓存：GET 请求命中未过期缓存即返回，不产生网络请求。
 actor TMDBClient: TMDBClientProtocol {
-    private let session: URLSession
+    private let sessions: SessionProvider
     private let cache: any ResponseCacheProtocol
     private let tokenProvider: @Sendable () async -> String?
     private let languageProvider: @Sendable () async -> String
@@ -64,11 +64,18 @@ actor TMDBClient: TMDBClientProtocol {
 
     init(
         session: URLSession? = nil,
+        sessions: SessionProvider? = nil,
         cache: (any ResponseCacheProtocol)? = nil,
         tokenProvider: (@Sendable () async -> String?)? = nil,
         languageProvider: (@Sendable () async -> String)? = nil
     ) {
-        self.session = session ?? Self.makeDefaultSession()
+        if let sessions {
+            self.sessions = sessions
+        } else if let session {
+            self.sessions = SessionProvider(fixed: session)
+        } else {
+            self.sessions = SessionProvider(configuration: Self.makeConfiguration)
+        }
         self.cache = cache ?? ResponseCache()
         self.tokenProvider = tokenProvider ?? {
             (try? await KeychainStore.shared.readToken()) ?? nil
@@ -76,13 +83,15 @@ actor TMDBClient: TMDBClientProtocol {
         self.languageProvider = languageProvider ?? { "zh-CN" }
     }
 
-    private static func makeDefaultSession() -> URLSession {
+    /// 基础会话配置（代理由 `SessionProvider` 按当前设置注入）。
+    nonisolated static func makeConfiguration(proxy: ProxyConfiguration) -> URLSessionConfiguration {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 20
         configuration.timeoutIntervalForResource = 60
         configuration.httpAdditionalHeaders = ["Accept": "application/json"]
         configuration.waitsForConnectivity = false
-        return URLSession(configuration: configuration)
+        configuration.connectionProxyDictionary = proxy.connectionProxyDictionary
+        return configuration
     }
 
     // MARK: - 上层接口
@@ -153,7 +162,7 @@ actor TMDBClient: TMDBClientProtocol {
 
                 lastRequestAt = try await RequestThrottle.waitIfNeeded(lastRequestAt: lastRequestAt)
                 isRequestInFlight = true
-                let (data, response) = try await session.data(for: request)
+                let (data, response) = try await sessions.session().data(for: request)
                 isRequestInFlight = false
                 lastRequestFinishedAt = Date()
 

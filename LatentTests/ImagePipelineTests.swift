@@ -145,7 +145,56 @@ struct ImagePipelineTests {
         #expect(PixelBucket.pixelSize(forDisplayWidth: 168) == 342) // 336 → w342（网格海报）
         #expect(PixelBucket.pixelSize(forDisplayWidth: 250) == 500) // 500 → w500（详情海报）
         #expect(PixelBucket.pixelSize(forDisplayWidth: 640) == 1280) // 1280 → w1280（Hero）
-        #expect(PixelBucket.pixelSize(forDisplayWidth: 1000) == 2000) // 超出上限 → 最大桶
+        #expect(PixelBucket.pixelSize(forDisplayWidth: 1000) == 1280) // 超出上限 → 最大桶（TMDB 无 w2000）
+    }
+
+    @Test("尺寸段：桶 → w185 / w342 / w500 / w780 / w1280")
+    func sizeNames() {
+        #expect(PixelBucket.sizeName(forPixelSize: 185) == "w185")
+        #expect(PixelBucket.sizeName(forPixelSize: 342) == "w342")
+        #expect(PixelBucket.sizeName(forPixelSize: 500) == "w500")
+        #expect(PixelBucket.sizeName(forPixelSize: 780) == "w780")
+        #expect(PixelBucket.sizeName(forPixelSize: 1280) == "w1280")
+        #expect(PixelBucket.sizeName(forPixelSize: 2000) == "w1280") // 上限收敛
+    }
+
+    @Test("图片地址：必须含 w<尺寸> 段（缺段即 404 的回归）")
+    func imageURLKeepsSizeSegment() {
+        let base = URL(string: "https://image.tmdb.org/t/p/")!
+        #expect(
+            ImagePipeline.imageURL(baseURL: base, path: "/poster.jpg", pixelSize: 342).absoluteString
+                == "https://image.tmdb.org/t/p/w342/poster.jpg"
+        )
+        // 无前导斜杠同样成立
+        #expect(
+            ImagePipeline.imageURL(baseURL: base, path: "poster.jpg", pixelSize: 500).absoluteString
+                == "https://image.tmdb.org/t/p/w500/poster.jpg"
+        )
+        // 传入非桶值时收敛到最近的更大桶；超上限收敛到 w1280
+        #expect(
+            ImagePipeline.imageURL(baseURL: base, path: "/poster.jpg", pixelSize: 100).absoluteString
+                == "https://image.tmdb.org/t/p/w185/poster.jpg"
+        )
+        #expect(
+            ImagePipeline.imageURL(baseURL: base, path: "/poster.jpg", pixelSize: 4096).absoluteString
+                == "https://image.tmdb.org/t/p/w1280/poster.jpg"
+        )
+    }
+
+    @Test("实际请求地址含尺寸段：不含则 404（回归）")
+    func requestCarriesSizeSegment() async throws {
+        let (pipeline, _) = makePipeline()
+        let png = makePNG(width: 64, height: 96)
+        URLProtocolStub.handler = { request in
+            let url = request.url?.absoluteString ?? ""
+            // 形如 …/t/p/w342/poster.jpg；缺尺寸段（曾经的真实 bug）时返回 404 → 用例失败
+            guard url.range(of: "/t/p/w[0-9]+/", options: .regularExpression) != nil else {
+                return .status(404)
+            }
+            return URLProtocolStub.Response(body: png)
+        }
+
+        _ = try await pipeline.image(for: "/poster.jpg", pixelSize: 342)
     }
 
     @Test("下采样：按最长边缩放")

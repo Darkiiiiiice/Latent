@@ -34,7 +34,7 @@ actor ImagePipeline {
     }
 
     private let memory = MemoryCache()
-    private let session: URLSession
+    private let sessions: SessionProvider
     private let disk: DiskImageCache
     private let baseURL: URL
 
@@ -44,18 +44,26 @@ actor ImagePipeline {
     /// URL → 原始文件大小（用于磁盘告警日志；不参与逻辑）。
     private var needsDiskSweep = false
 
-    init(session: URLSession? = nil, disk: DiskImageCache? = nil, baseURL: URL? = nil) {
-        self.session = session ?? Self.makeDefaultSession()
+    init(session: URLSession? = nil, sessions: SessionProvider? = nil, disk: DiskImageCache? = nil, baseURL: URL? = nil) {
+        if let sessions {
+            self.sessions = sessions
+        } else if let session {
+            self.sessions = SessionProvider(fixed: session)
+        } else {
+            self.sessions = SessionProvider(configuration: Self.makeConfiguration)
+        }
         self.disk = disk ?? DiskImageCache()
         self.baseURL = baseURL ?? URL(string: "https://image.tmdb.org/t/p/")!
     }
 
-    private static func makeDefaultSession() -> URLSession {
+    /// 基础会话配置（代理由 `SessionProvider` 按当前设置注入）。
+    nonisolated static func makeConfiguration(proxy: ProxyConfiguration) -> URLSessionConfiguration {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 30
         configuration.timeoutIntervalForResource = 60
         configuration.httpAdditionalHeaders = ["Accept": "image/*"]
-        return URLSession(configuration: configuration)
+        configuration.connectionProxyDictionary = proxy.connectionProxyDictionary
+        return configuration
     }
 
     // MARK: - 对外入口
@@ -109,12 +117,12 @@ actor ImagePipeline {
         }
 
         // 2) 网络下载（最多自动重试一次）
-        let url = makeURL(path: path)
+        let url = makeURL(path: path, pixelSize: pixelSize)
         var lastError: (any Error)?
         for attempt in 1...2 {
             try Task.checkCancellation()
             do {
-                let (data, response) = try await session.data(from: url)
+                let (data, response) = try await sessions.session().data(from: url)
                 try Task.checkCancellation()
 
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 200
@@ -145,9 +153,18 @@ actor ImagePipeline {
         memory.cache.setObject(CachedImageBox(image), forKey: key as NSString, cost: cost)
     }
 
-    private func makeURL(path: String) -> URL {
+    private func makeURL(path: String, pixelSize: Int) -> URL {
+        Self.imageURL(baseURL: baseURL, path: path, pixelSize: pixelSize)
+    }
+
+    /// 图片地址 = `base_url` + `w<尺寸段>` + `file_path`（设计文档第 4 节）。
+    ///
+    /// 尺寸段**不可省略**：`…/t/p/{file_path}` 一律 404。
+    nonisolated static func imageURL(baseURL: URL, path: String, pixelSize: Int) -> URL {
         let trimmed = path.hasPrefix("/") ? String(path.dropFirst()) : path
-        return baseURL.appendingPathComponent(trimmed)
+        return baseURL
+            .appendingPathComponent(PixelBucket.sizeName(forPixelSize: pixelSize))
+            .appendingPathComponent(trimmed)
     }
 
     /// ImageIO 下采样（`CGImageSourceCreateThumbnailAtIndex`），避免全尺寸解码。
@@ -192,11 +209,20 @@ enum ImagePipelineError: Error, Sendable {
 
 /// 像素尺寸分桶：把展示宽度（×2 Retina）映射到对齐 TMDB 的固定桶，
 /// 限制内存/磁盘缓存键数量，同时在视网膜屏上保留足够清晰度。
+///
+/// 桶与 TMDB 尺寸段一一对应（`185 → w185`、`1280 → w1280`）；TMDB 无 `w2000`，
+/// 故最大桶取 1280（设计文档第 4 节）。
 enum PixelBucket {
-    static let buckets: [Int] = [185, 342, 500, 780, 1280, 2000]
+    static let buckets: [Int] = [185, 342, 500, 780, 1280]
 
     static func pixelSize(forDisplayWidth width: CGFloat) -> Int {
         let desired = Int((width * 2).rounded())
         return buckets.first(where: { $0 >= desired }) ?? buckets[buckets.count - 1]
+    }
+
+    /// 桶 → TMDB 尺寸段名（`w185` / `w342` / `w500` / `w780` / `w1280`）。
+    static func sizeName(forPixelSize pixelSize: Int) -> String {
+        let bucket = buckets.first(where: { $0 >= pixelSize }) ?? buckets[buckets.count - 1]
+        return "w\(bucket)"
     }
 }

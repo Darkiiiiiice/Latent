@@ -37,9 +37,9 @@ enum APIError: Error, Equatable, Sendable {
         case .serverError(let status):
             return "TMDB 服务异常（\(status)），请稍后重试"
         case .offline:
-            return "网络不可用，请检查连接"
+            return "网络不可用，请检查连接（如需代理见「设置 → 网络 → 代理」）"
         case .timedOut:
-            return "请求超时，请重试"
+            return "请求超时，请重试（国内直连 TMDB 不通时可在「设置 → 网络 → 代理」配置代理）"
         case .decodingFailed:
             return "数据格式异常"
         }

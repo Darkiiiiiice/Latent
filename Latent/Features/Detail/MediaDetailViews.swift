@@ -320,15 +320,6 @@ struct MediaDetailScaffold<Detail: MediaDetail, Facts: View, Extra: View>: View 
         }
         .background(UI.Palette.bg)
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button {
-                    NotificationCenter.default.post(name: AppCommandBus.back, object: nil)
-                } label: {
-                    Label("返回", systemImage: "chevron.backward")
-                }
-                .help("返回（⌘[）")
-            }
-
             if let summary, summary.mediaKind.isLibraryEligible {
                 ToolbarItemGroup(placement: .primaryAction) {
                     Button {
