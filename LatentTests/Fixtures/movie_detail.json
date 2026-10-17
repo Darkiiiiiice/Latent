@@ -1,0 +1,152 @@
+{
+  "adult": false,
+  "backdrop_path": "/xOMo8BRK7PfcJv9JCnx7s5hj0PX.jpg",
+  "belongs_to_collection": {
+    "id": 726871,
+    "name": "沙丘合集",
+    "poster_path": "/lr11mCT85T1JanlgjMqgMhtEDby.jpg",
+    "backdrop_path": "/yYcVYQ4KkFyCbLcHDgQlEMzWF2S.jpg"
+  },
+  "budget": 190000000,
+  "genres": [
+    { "id": 878, "name": "科幻" },
+    { "id": 12, "name": "冒险" }
+  ],
+  "homepage": "https://www.dunemovie.com",
+  "id": 693134,
+  "imdb_id": "tt15239678",
+  "original_language": "en",
+  "original_title": "Dune: Part Two",
+  "overview": "保罗·厄崔迪与契妮和弗雷曼人并肩作战，踏上复仇之路，阻止只有他能预见的可怕未来。",
+  "popularity": 1184.2,
+  "poster_path": "/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",
+  "production_companies": [],
+  "release_date": "2024-02-27",
+  "revenue": 714444358,
+  "runtime": 166,
+  "spoken_languages": [
+    { "english_name": "English", "iso_639_1": "en", "name": "English" }
+  ],
+  "status": "Released",
+  "tagline": "长路漫漫",
+  "title": "沙丘：第二部",
+  "video": false,
+  "vote_average": 8.133,
+  "vote_count": 4210,
+  "credits": {
+    "cast": [
+      {
+        "adult": false,
+        "gender": 2,
+        "id": 1190668,
+        "known_for_department": "Acting",
+        "name": "提莫西·查拉梅",
+        "original_name": "Timothée Chalamet",
+        "popularity": 31.2,
+        "profile_path": "/BE2sdjpgsa2rNTFa66f7upkaOP.jpg",
+        "cast_id": 1,
+        "character": "保罗·厄崔迪",
+        "credit_id": "abc",
+        "order": 0
+      }
+    ],
+    "crew": [
+      {
+        "adult": false,
+        "gender": 2,
+        "id": 137427,
+        "known_for_department": "Directing",
+        "name": "丹尼斯·维伦纽瓦",
+        "original_name": "Denis Villeneuve",
+        "popularity": 12.3,
+        "profile_path": null,
+        "credit_id": "def",
+        "department": "Directing",
+        "job": "Director"
+      }
+    ]
+  },
+  "external_ids": {
+    "imdb_id": "tt15239678",
+    "wikidata_id": "Q10481490",
+    "facebook_id": null,
+    "instagram_id": "dunemovie",
+    "twitter_id": "dunemovie"
+  },
+  "images": {
+    "backdrops": [
+      {
+        "aspect_ratio": 1.778,
+        "height": 2160,
+        "iso_639_1": null,
+        "file_path": "/xOMo8BRK7PfcJv9JCnx7s5hj0PX.jpg",
+        "vote_average": 5.456,
+        "vote_count": 8,
+        "width": 3840
+      }
+    ],
+    "posters": []
+  },
+  "recommendations": {
+    "page": 1,
+    "results": [
+      {
+        "adult": false,
+        "backdrop_path": "/jYEW5xZkZk2WTrdbMGAPFuBqbDc.jpg",
+        "id": 438631,
+        "title": "沙丘",
+        "original_language": "en",
+        "original_title": "Dune",
+        "overview": "保罗·厄崔迪的旅途开始。",
+        "poster_path": "/d5NXSklXo0qyIYkgV94XAgMIckC.jpg",
+        "media_type": "movie",
+        "genre_ids": [878, 12],
+        "popularity": 610.2,
+        "release_date": "2021-09-15",
+        "vote_average": 7.784,
+        "vote_count": 11230
+      }
+    ],
+    "total_pages": 1,
+    "total_results": 1
+  },
+  "release_dates": {
+    "results": [
+      {
+        "iso_3166_1": "US",
+        "release_dates": [
+          {
+            "certification": "PG-13",
+            "iso_639_1": null,
+            "release_date": "2024-03-01T00:00:00.000Z",
+            "type": 3,
+            "note": ""
+          }
+        ]
+      }
+    ]
+  },
+  "similar": {
+    "page": 1,
+    "results": [
+      {
+        "adult": false,
+        "backdrop_path": "/xJHokMbljvjADYdit5fK5VQsXEG.jpg",
+        "id": 157336,
+        "title": "星际穿越",
+        "original_language": "en",
+        "original_title": "Interstellar",
+        "overview": "地球环境恶化。",
+        "poster_path": "/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg",
+        "media_type": "movie",
+        "genre_ids": [878, 18],
+        "popularity": 156.3,
+        "release_date": "2014-11-05",
+        "vote_average": 8.447,
+        "vote_count": 34521
+      }
+    ],
+    "total_pages": 1,
+    "total_results": 1
+  }
+}

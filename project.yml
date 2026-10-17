@@ -1,0 +1,95 @@
+# 显影（Latent）—— XcodeGen 工程描述
+#
+# 用 `xcodegen generate` 生成 Latent.xcodeproj（生成物不手工编辑）。
+# 新增文件后重新生成即可；工程文件（.xcodeproj）在 .gitignore 中，不入库。
+#
+# 硬性约束（见 docs/设计文档.md 第 2 节）：
+# - 纯 Swift + SwiftUI，0 第三方依赖
+# - 最低系统 macOS 27.0；Swift 6 严格并发
+# - App Sandbox（network.client）+ Hardened Runtime
+
+name: Latent
+
+options:
+  bundleIdPrefix: app.latent
+  deploymentTarget:
+    macOS: "27.0"
+  createIntermediateGroups: true
+  developmentLanguage: zh-Hans
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    ENABLE_HARDENED_RUNTIME: YES
+    SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEAD_CODE_STRIPPING: YES
+  configs:
+    Debug:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+      ENABLE_TESTABILITY: YES
+
+targets:
+  Latent:
+    type: application
+    platform: macOS
+    deploymentTarget: "27.0"
+    sources:
+      - path: Latent
+    settings:
+      base:
+        PRODUCT_NAME: Latent
+        PRODUCT_BUNDLE_IDENTIFIER: app.latent.Latent
+        INFOPLIST_KEY_CFBundleDisplayName: 显影
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.entertainment
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        GENERATE_INFOPLIST_FILE: YES
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_USER_SELECTED_FILES: readonly
+        ENABLE_INCOMING_NETWORK_CONNECTIONS: NO
+        ENABLE_OUTGOING_NETWORK_CONNECTIONS: YES
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        COMBINE_HIDPI_IMAGES: YES
+    entitlements:
+      path: Latent/Resources/Latent.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+
+  LatentTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "27.0"
+    sources:
+      - path: LatentTests
+        excludes:
+          - Fixtures
+      - path: LatentTests/Fixtures
+        buildPhase: resources
+    dependencies:
+      - target: Latent
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.latent.LatentTests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  Latent:
+    build:
+      targets:
+        Latent: all
+        LatentTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - LatentTests
+    archive:
+      config: Release

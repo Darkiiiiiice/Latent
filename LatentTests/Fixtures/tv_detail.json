@@ -1,0 +1,115 @@
+{
+  "adult": false,
+  "backdrop_path": "/56v2KjBlU4XaOv9rVYEQypROD7P.jpg",
+  "created_by": [
+    { "id": 1223796, "credit_id": "abc", "name": "Duffer Brothers", "gender": 0, "profile_path": null }
+  ],
+  "episode_run_time": [50],
+  "first_air_date": "2016-07-15",
+  "genres": [
+    { "id": 18, "name": "剧情" },
+    { "id": 9648, "name": "悬疑" },
+    { "id": 10765, "name": "科幻奇幻" }
+  ],
+  "homepage": "https://www.netflix.com/strangerthings",
+  "id": 66732,
+  "in_production": true,
+  "languages": ["en"],
+  "last_air_date": "2022-07-01",
+  "name": "怪奇物语",
+  "networks": [
+    { "id": 213, "logo_path": "/wwemzKWzjKYJFfCeiB57q3r4Bcm.png", "name": "Netflix", "origin_country": "US" }
+  ],
+  "number_of_episodes": 34,
+  "number_of_seasons": 4,
+  "original_language": "en",
+  "original_name": "Stranger Things",
+  "overview": "印第安纳州霍金斯镇，一个男孩的失踪揭开超自然谜团。",
+  "popularity": 620.4,
+  "poster_path": "/49WJfeN0moxb9IPfGn8AIqMGskD.jpg",
+  "seasons": [
+    {
+      "air_date": "2016-07-15",
+      "episode_count": 8,
+      "id": 77680,
+      "name": "第 1 季",
+      "overview": "1983 年，威尔失踪。",
+      "poster_path": "/rbNUH4AwEAip0x0XxyGB4SLPMoI.jpg",
+      "season_number": 1,
+      "vote_average": 8.3
+    },
+    {
+      "air_date": "2017-10-27",
+      "episode_count": 9,
+      "id": 83240,
+      "name": "第 2 季",
+      "overview": null,
+      "poster_path": "/wLHTq6n2vTNqDgXZaKcnYt5XzUM.jpg",
+      "season_number": 2,
+      "vote_average": 8.0
+    },
+    {
+      "air_date": null,
+      "episode_count": 0,
+      "id": 206558,
+      "name": "特别篇",
+      "overview": "",
+      "poster_path": null,
+      "season_number": 0,
+      "vote_average": 0
+    }
+  ],
+  "status": "Returning Series",
+  "tagline": "一个关于颠倒世界的故事",
+  "vote_average": 8.6,
+  "vote_count": 17234,
+  "credits": {
+    "cast": [
+      {
+        "adult": false,
+        "gender": 1,
+        "id": 1356210,
+        "known_for_department": "Acting",
+        "name": "米莉·波比·布朗",
+        "original_name": "Millie Bobby Brown",
+        "popularity": 45.1,
+        "profile_path": "/abc.jpg",
+        "character": "11号 / 简·霍珀",
+        "credit_id": "xyz",
+        "order": 0
+      }
+    ],
+    "crew": []
+  },
+  "external_ids": {
+    "imdb_id": "tt4574334",
+    "twitter_id": "Stranger_Things",
+    "instagram_id": "strangerthingstv"
+  },
+  "images": {
+    "backdrops": [
+      {
+        "aspect_ratio": 1.778,
+        "file_path": "/56v2KjBlU4XaOv9rVYEQypROD7P.jpg",
+        "height": 1080,
+        "iso_639_1": null,
+        "vote_average": 5.3,
+        "vote_count": 2,
+        "width": 1920
+      },
+      {
+        "aspect_ratio": 0.667,
+        "file_path": "/poster-ish.jpg",
+        "height": 1500,
+        "iso_639_1": "en",
+        "vote_average": 5.0,
+        "vote_count": 1,
+        "width": 1000
+      }
+    ],
+    "posters": []
+  },
+  "similar": { "page": 1, "results": [], "total_pages": 1, "total_results": 0 },
+  "recommendations": { "page": 1, "results": [], "total_pages": 1, "total_results": 0 },
+  "content_ratings": { "results": [] }
+}

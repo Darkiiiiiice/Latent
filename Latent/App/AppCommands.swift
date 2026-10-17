@@ -1,0 +1,45 @@
+import SwiftUI
+
+/// 菜单与快捷键（设计文档第 8.7 节）。
+struct AppCommands: Commands {
+    var body: some Commands {
+        // 侧边栏范围快捷键：⌘1 趋势、⌘2 发现、⌘3 收藏、⌘4 观看清单、⌘5 历史
+        CommandGroup(after: .sidebar) {
+            Divider()
+            ForEach(SidebarScope.allCases) { scope in
+                Button(scope.title) {
+                    AppCommandBus.select(scope)
+                }
+                .keyboardShortcut(KeyEquivalent(Character("\(scope.shortcutIndex)")), modifiers: .command)
+            }
+        }
+
+        // 视图菜单：刷新 / 返回 / 搜索
+        CommandGroup(after: .toolbar) {
+            Divider()
+            Button("刷新") {
+                NotificationCenter.default.post(name: AppCommandBus.refresh, object: nil)
+            }
+            .keyboardShortcut("r", modifiers: .command)
+
+            Button("返回") {
+                NotificationCenter.default.post(name: AppCommandBus.back, object: nil)
+            }
+            .keyboardShortcut("[", modifiers: .command)
+
+            Divider()
+
+            Button("搜索…") {
+                NotificationCenter.default.post(name: AppCommandBus.focusSearch, object: nil)
+            }
+            .keyboardShortcut("f", modifiers: .command)
+        }
+
+        // 帮助菜单：关于显影 + TMDB 署名
+        CommandGroup(replacing: .help) {
+            Link("关于显影", destination: URL(string: "https://www.themoviedb.org")!)
+            Divider()
+            Text("This product uses the TMDB API but is not endorsed or certified by TMDB.")
+        }
+    }
+}

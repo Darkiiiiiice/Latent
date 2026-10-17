@@ -1,0 +1,39 @@
+{
+  "page": 1,
+  "results": [
+    {
+      "adult": false,
+      "backdrop_path": "/yF1eOkaYvwiORauRCPWznV9xVvi.jpg",
+      "id": 1022789,
+      "title": "头脑特工队2",
+      "original_language": "en",
+      "original_title": "Inside Out 2",
+      "overview": "情绪小人们回来了。",
+      "poster_path": "/vpnVM9B6NMmQpWeZvzLvDESb2QY.jpg",
+      "media_type": "movie",
+      "genre_ids": [16, 10751, 18],
+      "popularity": 6321.09,
+      "release_date": "2024-06-11",
+      "vote_average": 7.6,
+      "vote_count": 6532
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/fqv8v6AycXKsivp1T5yKtLbGXce.jpg",
+      "id": 653346,
+      "title": "猩球崛起：新世界",
+      "original_language": "en",
+      "original_title": "Kingdom of the Planet of the Apes",
+      "overview": "后凯撒时代。",
+      "poster_path": "/gKkl37BQuKTanygYQG1pyYgLVgf.jpg",
+      "media_type": "movie",
+      "genre_ids": [878, 12, 28],
+      "popularity": 3012.55,
+      "release_date": "2024-05-08",
+      "vote_average": 7.13,
+      "vote_count": 4231
+    }
+  ],
+  "total_pages": 3,
+  "total_results": 60
+}

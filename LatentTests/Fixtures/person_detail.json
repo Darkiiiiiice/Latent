@@ -1,0 +1,75 @@
+{
+  "adult": false,
+  "also_known_as": ["Timothée Hal Chalamet", "甜茶"],
+  "biography": "提莫西·查拉梅，美国与法国双重国籍演员。",
+  "birthday": "1995-12-27",
+  "deathday": null,
+  "gender": 2,
+  "homepage": null,
+  "id": 1190668,
+  "imdb_id": "nm3154303",
+  "known_for_department": "Acting",
+  "name": "提莫西·查拉梅",
+  "place_of_birth": "美国纽约州纽约市",
+  "popularity": 52.3,
+  "profile_path": "/BE2sdjpgsa2rNTFa66f7upkaOP.jpg",
+  "combined_credits": {
+    "cast": [
+      {
+        "adult": false,
+        "backdrop_path": "/xOMo8BRK7PfcJv9JCnx7s5hj0PX.jpg",
+        "character": "保罗·厄崔迪",
+        "credit_id": "c1",
+        "id": 693134,
+        "title": "沙丘：第二部",
+        "media_type": "movie",
+        "genre_ids": [878],
+        "original_language": "en",
+        "original_title": "Dune: Part Two",
+        "overview": "保罗的复仇之路。",
+        "popularity": 1184.2,
+        "poster_path": "/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",
+        "release_date": "2024-02-27",
+        "vote_average": 8.133,
+        "vote_count": 4210
+      },
+      {
+        "adult": false,
+        "id": 693134,
+        "title": "沙丘：第二部",
+        "media_type": "movie",
+        "release_date": "2024-02-27",
+        "vote_average": 8.1,
+        "vote_count": 4210,
+        "character": "重复条目（应去重）"
+      },
+      {
+        "adult": false,
+        "backdrop_path": null,
+        "first_air_date": "2022-01-05",
+        "id": 99999,
+        "name": "某剧集",
+        "media_type": "tv",
+        "original_name": "Some Show",
+        "overview": null,
+        "popularity": 10.0,
+        "poster_path": null,
+        "vote_average": 6.5,
+        "vote_count": 120,
+        "character": "本人"
+      },
+      {
+        "adult": false,
+        "id": 55555,
+        "media_type": "person",
+        "name": "不是作品"
+      }
+    ],
+    "crew": []
+  },
+  "external_ids": {
+    "imdb_id": "nm3154303",
+    "instagram_id": "tchalamet"
+  },
+  "images": { "profiles": [] }
+}

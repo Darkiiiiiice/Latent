@@ -13,6 +13,9 @@ build/
 .build/
 .swiftpm/
 
+# xcodegen 生成物（工程文件由 project.yml 生成，不入库）
+Latent.xcodeproj/
+
 # macOS
 .DS_Store
 
