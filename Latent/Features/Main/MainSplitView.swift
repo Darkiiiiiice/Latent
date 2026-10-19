@@ -78,21 +78,26 @@ struct MainSplitView: View {
             Button {
                 isSearchPresented.toggle()
             } label: {
+                // 注意：工具栏项的 label 里不能放 `Spacer`。macOS 27 会把带弹性宽度的
+                // 工具栏项整个丢弃（搜索框因此不可见，2026-10-19 踩坑），这里全部用定宽布局。
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 12))
                     Text("搜索电影、剧集、人物…")
                         .font(.system(size: 12))
-                    Spacer(minLength: 0)
-                    Text("⌘F")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(UI.Palette.textSecondary)
                 }
+                .frame(width: UI.Sizes.searchFieldWidth - UI.Spacing.s2 * 2, height: 24, alignment: .leading)
                 .foregroundStyle(UI.Palette.textSecondary)
                 .padding(.horizontal, UI.Spacing.s2)
                 .frame(width: UI.Sizes.searchFieldWidth, height: 24)
                 .background(UI.Palette.surfaceElevated, in: RoundedRectangle(cornerRadius: UI.Radius.input, style: .continuous))
                 .hairlineBorder(UI.Palette.border, radius: UI.Radius.input)
+                .overlay(alignment: .trailing) {
+                    Text("⌘F")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(UI.Palette.textSecondary)
+                        .padding(.trailing, UI.Spacing.s2)
+                }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

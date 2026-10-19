@@ -10,6 +10,8 @@ struct MediaGrid: View {
     var gridMode: Bool = true
     let open: (MediaSummary) -> Void
     var emptyMessage: String = "没有找到内容"
+    /// 最后一项进入可视区域时回调（无限滚动入口）。本地库等不分页场景传 nil。
+    var onReachEnd: (() -> Void)?
 
     @Environment(AppEnvironment.self) private var appEnv
 
@@ -31,6 +33,7 @@ struct MediaGrid: View {
                     ) {
                         MediaContextMenu(summary: item)
                     }
+                    .onAppear { reachEndIfLast(item) }
                 }
             }
         } else {
@@ -38,9 +41,15 @@ struct MediaGrid: View {
                 ForEach(items) { item in
                     MediaListRow(summary: item, onOpen: { open(item) })
                         .contextMenu { MediaContextMenu(summary: item) }
+                        .onAppear { reachEndIfLast(item) }
                 }
             }
         }
+    }
+
+    private func reachEndIfLast(_ item: MediaSummary) {
+        guard item.id == items.last?.id else { return }
+        onReachEnd?()
     }
 }
 

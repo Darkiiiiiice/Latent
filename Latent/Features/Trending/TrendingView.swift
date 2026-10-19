@@ -16,13 +16,14 @@ struct TrendingView: View {
                 header
 
                 if let feed {
-                    MediaGrid(items: feed.items, gridMode: gridMode, open: open)
-                        .overlay(alignment: .bottom) {
-                            FeedFooter(state: feed.state, retry: { Task { await feed.retry() } }, isEmpty: feed.items.isEmpty)
-                        }
                     if feed.state.isInitialLoading {
                         GridSkeleton(count: 10)
+                    } else {
+                        MediaGrid(items: feed.items, gridMode: gridMode, open: open, onReachEnd: {
+                            Task { await feed.loadMoreIfNeeded(currentItem: feed.items.last) }
+                        })
                     }
+                    FeedFooter(state: feed.state, retry: { Task { await feed.retry() } }, isEmpty: feed.items.isEmpty)
                 } else {
                     GridSkeleton(count: 10)
                 }
@@ -104,7 +105,9 @@ struct DiscoverView: View {
                     if feed.state.isInitialLoading {
                         GridSkeleton(count: 12)
                     } else {
-                        MediaGrid(items: feed.items, gridMode: gridMode, open: open, emptyMessage: "当前筛选条件下没有结果")
+                        MediaGrid(items: feed.items, gridMode: gridMode, open: open, emptyMessage: "当前筛选条件下没有结果", onReachEnd: {
+                            Task { await feed.loadMoreIfNeeded(currentItem: feed.items.last) }
+                        })
                     }
                     FeedFooter(state: feed.state, retry: { Task { await feed.retry() } }, isEmpty: feed.items.isEmpty)
                 } else {
@@ -120,10 +123,17 @@ struct DiscoverView: View {
             await loadFeed()
         }
         .onChange(of: mediaKind) { _, _ in
+            // 电影 / 剧集的类型 ID 属于两套体系，切换时清空已选类型并重新拉取。
+            query.genreIDs.removeAll()
+            genres = []
+            Task { await loadGenres() }
             scheduleReload()
         }
         .onChange(of: query) { _, _ in
             scheduleReload()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AppCommandBus.refresh)) { _ in
+            Task { await feed?.reload() }
         }
     }
 

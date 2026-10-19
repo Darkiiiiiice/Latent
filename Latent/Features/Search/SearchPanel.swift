@@ -10,12 +10,13 @@ struct SearchPanel: View {
     @Environment(AppSettings.self) private var settings
 
     @State private var query = ""
-    @State private var results: [SearchResult] = []
-    @State private var isSearching = false
-    @State private var errorMessage: String?
+    @State private var feed: PaginatedFeed<SearchResult>?
     @State private var selectedIndex: Int = -1
     @State private var debouncer = Debouncer()
     @FocusState private var isFocused: Bool
+
+    private var results: [SearchResult] { feed?.items ?? [] }
+    private var isSearching: Bool { feed?.state.isLoadingAny ?? false }
 
     private var movies: [MediaSummary] {
         results.compactMap { if case .movie(let item) = $0 { return item } else { return nil } }
@@ -38,16 +39,31 @@ struct SearchPanel: View {
                 VStack(alignment: .leading, spacing: UI.Spacing.s4) {
                     if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         recentSearches
-                    } else if let errorMessage {
-                        ErrorBanner(message: errorMessage)
-                    } else if results.isEmpty && !isSearching {
-                        EmptyState(message: "没有找到「\(query)」", actionTitle: "清空搜索") {
-                            query = ""
+                    } else if let feed {
+                        if case .error(let message) = feed.state, feed.items.isEmpty {
+                            ErrorBanner(message: message) { Task { await feed.retry() } }
+                        } else if feed.items.isEmpty {
+                            if feed.state.isInitialLoading {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(UI.Spacing.s6)
+                            } else {
+                                EmptyState(message: "没有找到「\(query)」", actionTitle: "清空搜索") {
+                                    query = ""
+                                }
+                            }
+                        } else {
+                            group(title: "电影", items: movies)
+                            group(title: "剧集", items: shows)
+                            personGroup
+                            paginationFooter(feed)
                         }
                     } else {
-                        group(title: "电影", items: movies)
-                        group(title: "剧集", items: shows)
-                        personGroup
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(maxWidth: .infinity)
+                            .padding(UI.Spacing.s6)
                     }
                 }
                 .padding(UI.Spacing.s3)
@@ -211,14 +227,49 @@ struct SearchPanel: View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             debouncer.cancel()
-            results = []
-            isSearching = false
-            errorMessage = nil
+            feed = nil
             return
         }
         debouncer.schedule { [weak appEnv] in
             guard let appEnv else { return }
-            await performSearch(trimmed, client: appEnv.client)
+            let client = appEnv.client
+            let newFeed = PaginatedFeed<SearchResult> { page in
+                let paged = try await client.searchMulti(query: trimmed, page: page)
+                return (paged.items, paged.isLastPage)
+            }
+            self.feed = newFeed
+            await newFeed.loadFirstPageIfNeeded()
+        }
+    }
+
+    /// 搜索分页页脚：加载更多 / 加载中 / 失败重试 / 到底提示。
+    @ViewBuilder
+    private func paginationFooter(_ feed: PaginatedFeed<SearchResult>) -> some View {
+        switch feed.state {
+        case .loadingMore:
+            ProgressView()
+                .controlSize(.small)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, UI.Spacing.s2)
+        case .loaded:
+            Button("加载更多") {
+                Task { await feed.loadNextPageIfPossible() }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .frame(maxWidth: .infinity)
+            .padding(.top, UI.Spacing.s2)
+        case .error(let message):
+            ErrorBanner(message: message) { Task { await feed.retry() } }
+                .padding(.top, UI.Spacing.s2)
+        case .end:
+            Text("已经到底了")
+                .font(.system(size: 11))
+                .foregroundStyle(UI.Palette.textSecondary)
+                .frame(maxWidth: .infinity)
+                .padding(.top, UI.Spacing.s2)
+        case .idle, .loadingFirst:
+            EmptyView()
         }
     }
 
@@ -242,20 +293,6 @@ struct SearchPanel: View {
             case .person: return true
             }
         }
-    }
-
-    private func performSearch(_ text: String, client: any TMDBClientProtocol) async {
-        isSearching = true
-        errorMessage = nil
-        do {
-            let page = try await client.searchMulti(query: text, page: 1)
-            results = page.items
-        } catch let error as APIError {
-            errorMessage = error.errorDescription
-        } catch {
-            errorMessage = APIError.offline.errorDescription
-        }
-        isSearching = false
     }
 
     private func open(_ summary: MediaSummary) {

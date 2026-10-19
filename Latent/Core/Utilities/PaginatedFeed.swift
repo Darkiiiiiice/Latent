@@ -48,10 +48,16 @@ final class PaginatedFeed<Item: Identifiable & Sendable> where Item.ID: Hashable
     /// 滚动到底部触发（同一时刻只允许一次；已到末页忽略）。
     func loadMoreIfNeeded(currentItem: Item?) async {
         guard let currentItem else { return }
+        guard currentItem.id == items.last?.id else { return }
+        await loadNextPageIfPossible()
+    }
+
+    /// 加载下一页（不依赖「最后一项出现」的事件，供「加载更多」按钮等显式入口使用）。
+    /// 未处于 `.loaded`（首屏加载中 / 已有分页请求在飞 / 已结束 / 错误待重试）时忽略。
+    func loadNextPageIfPossible() async {
         guard !lastPageReached else { return }
         guard !state.isLoadingAny else { return }
         guard case .loaded = state else { return }
-        guard currentItem.id == items.last?.id else { return }
         await run(page: nextPage, isFirst: false)
     }
 

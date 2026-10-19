@@ -203,6 +203,27 @@ struct PaginatedFeedTests {
         #expect(loadCount == 1)
     }
 
+    @Test("显式加载下一页：仅 loaded 态生效")
+    func explicitNextPage() async {
+        var loadCount = 0
+        let feed = PaginatedFeed<MediaSummary> { page in
+            loadCount += 1
+            let items = (0..<20).map { MediaSummary(id: (page - 1) * 20 + $0, mediaKind: .movie, title: "作品") }
+            return (items, page >= 2)
+        }
+
+        await feed.loadNextPageIfPossible() // idle：忽略
+        #expect(loadCount == 0)
+
+        await feed.loadFirstPageIfNeeded()
+        await feed.loadNextPageIfPossible()
+        #expect(loadCount == 2)
+        #expect(feed.state == .end)
+
+        await feed.loadNextPageIfPossible() // 末页：忽略
+        #expect(loadCount == 2)
+    }
+
     private actor Counter {
         private var value = 0
         func increment() -> Int {
