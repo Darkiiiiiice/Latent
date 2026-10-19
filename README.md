@@ -8,7 +8,7 @@ macOS 上的 TMDB 元数据浏览器：搜索电影、剧集与人物，浏览�
 
 ## 状态
 
-**P0–P3 完成，P4 剩余人工走查项。** 设计文档是唯一事实来源：
+**v1 完成（P0–P4）。** 视觉 / 动效 / 无障碍人工走查通过；按「自用」定位不做公证与上架。设计文档是唯一事实来源：
 
 - [`docs/设计文档.md`](docs/设计文档.md) —— 目标与约束 / TMDB API 设计 / 架构 / 图片管线 / UI 设计系统 / 里程碑（P0–P4）/ 验收与测试
 
@@ -23,6 +23,8 @@ macOS 上的 TMDB 元数据浏览器：搜索电影、剧集与人物，浏览�
 - **基础设施**：Keychain 存 Token、URLSession 代理、响应缓存 TTL、图片管线（内存 + 磁盘 LRU + ImageIO 下采样）、暗 / 浅双主题与 Reduce Motion 降级
 
 测试：`xcodebuild test -project Latent.xcodeproj -scheme Latent` —— **85 项、15 个套件全绿**（Swift Testing + URLProtocol stub + fixture JSON + 内存 SwiftData 容器；含真实沙箱环境下的 Keychain 用例）。
+
+性能基线（M1 Pro，Debug 自用构建）：空闲 CPU **0.0%**（5 秒采样）、首屏加载后常驻内存约 **125MB**、网格滚动流畅。窗口尺寸与位置由 SwiftUI `WindowGroup` 自动恢复。
 
 ## 关键决策
 
