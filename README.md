@@ -45,14 +45,17 @@ Latent/
 ├── project.yml          # XcodeGen 工程描述（唯一的工程配置来源）
 ├── docs/
 │   └── 设计文档.md       # 完整设计方案（拷贝自 Obsidian 库）
+├── Design/
+│   └── AppIcon-source.png  # 应用图标源稿（1254×1254，用户提供）
 ├── scripts/
-│   └── gen_colors.py    # 颜色资产生成脚本（记录用；资产以文件为准）
+│   ├── gen_colors.py    # 颜色资产生成脚本（记录用；资产以文件为准）
+│   └── make_appicon.py  # 应用图标生成脚本（源稿 → AppIcon.appiconset 全套）
 ├── Latent/              # 应用源码
 │   ├── App/             # 入口、依赖容器、菜单、导航模型
 │   ├── Core/            # 网络 / 模型 / 持久化 / 图片管线 / 工具（不 import SwiftUI）
 │   ├── Features/        # 引导 / 主界面 / 趋势 / 搜索 / 详情 / 库 / 设置
 │   ├── UI/              # 设计 tokens 与通用组件
-│   └── Resources/       # Assets（颜色资产 + AppIcon 占位）、entitlements
+│   └── Resources/       # Assets（颜色资产 + AppIcon）、entitlements
 └── LatentTests/         # Swift Testing 单测与集成测试（fixture 在 Fixtures/）
 ```
 
@@ -60,7 +63,7 @@ Latent/
 
 1. **人工走查**：视觉 / 动效（Reduce Motion）/ 无障碍（VoiceOver、全键盘）/ 手工矩阵。
 2. 真实 Token 走通「引导 → 搜索 → 详情 → 收藏 → 重启 → 库」并记录性能基准（滚动帧率、内存）。
-3. 应用图标（当前为空占位）；窗口尺寸 / 位置恢复。
+3. 窗口尺寸 / 位置恢复。（应用图标已完成：源稿 `Design/AppIcon-source.png`，重新生成用 `python3 scripts/make_appicon.py`。）
 
 ## 常见问题
 
