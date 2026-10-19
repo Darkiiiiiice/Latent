@@ -16,14 +16,17 @@ struct TrendingView: View {
                 header
 
                 if let feed {
-                    if feed.state.isInitialLoading {
+                    // 首屏失败：只显示内联错误横幅 + 重试，不与「没有找到内容」空状态同时出现（设计文档第 4 节错误态）。
+                    if case .error(let message) = feed.state, feed.items.isEmpty {
+                        ErrorBanner(message: message) { Task { await feed.retry() } }
+                    } else if feed.state.isInitialLoading {
                         GridSkeleton(count: 10)
                     } else {
                         MediaGrid(items: feed.items, gridMode: gridMode, open: open, onReachEnd: {
                             Task { await feed.loadMoreIfNeeded(currentItem: feed.items.last) }
                         })
+                        FeedFooter(state: feed.state, retry: { Task { await feed.retry() } }, isEmpty: feed.items.isEmpty)
                     }
-                    FeedFooter(state: feed.state, retry: { Task { await feed.retry() } }, isEmpty: feed.items.isEmpty)
                 } else {
                     GridSkeleton(count: 10)
                 }
@@ -102,14 +105,17 @@ struct DiscoverView: View {
                 filterBar
 
                 if let feed {
-                    if feed.state.isInitialLoading {
+                    // 首屏失败：只显示内联错误横幅 + 重试，不与「当前筛选条件下没有结果」空状态同时出现（设计文档第 4 节错误态）。
+                    if case .error(let message) = feed.state, feed.items.isEmpty {
+                        ErrorBanner(message: message) { Task { await feed.retry() } }
+                    } else if feed.state.isInitialLoading {
                         GridSkeleton(count: 12)
                     } else {
                         MediaGrid(items: feed.items, gridMode: gridMode, open: open, emptyMessage: "当前筛选条件下没有结果", onReachEnd: {
                             Task { await feed.loadMoreIfNeeded(currentItem: feed.items.last) }
                         })
+                        FeedFooter(state: feed.state, retry: { Task { await feed.retry() } }, isEmpty: feed.items.isEmpty)
                     }
-                    FeedFooter(state: feed.state, retry: { Task { await feed.retry() } }, isEmpty: feed.items.isEmpty)
                 } else {
                     GridSkeleton(count: 12)
                 }

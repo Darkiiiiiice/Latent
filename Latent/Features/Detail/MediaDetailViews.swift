@@ -26,6 +26,7 @@ struct MovieDetailView: View {
     @State private var movie: MovieDetail?
     @State private var errorMessage: String?
     @State private var isLoading = true
+    @State private var showsReceipt = false
 
     var body: some View {
         MediaDetailScaffold(
@@ -34,11 +35,17 @@ struct MovieDetailView: View {
             isLoading: isLoading,
             errorMessage: errorMessage,
             reload: { await load() },
+            receiptAction: movie == nil ? nil : { showsReceipt = true },
             extraContent: { _ in EmptyView() }
         ) { detail in
             factsSection(detail)
         }
         .task(id: movieID) { await load() }
+        .sheet(isPresented: $showsReceipt) {
+            if let movie {
+                ReceiptSheet(movie: movie)
+            }
+        }
     }
 
     private func factsSection(_ detail: MovieDetail) -> some View {
@@ -260,6 +267,8 @@ struct MediaDetailScaffold<Detail: MediaDetail, Facts: View, Extra: View>: View 
     let isLoading: Bool
     let errorMessage: String?
     let reload: () async -> Void
+    /// 分享卡入口（仅电影详情传值；剧集为 nil，不出现该按钮）。
+    let receiptAction: (() -> Void)?
     @ViewBuilder let facts: (Detail) -> Facts
     @ViewBuilder let extraContent: (Detail) -> Extra
 
@@ -279,6 +288,7 @@ struct MediaDetailScaffold<Detail: MediaDetail, Facts: View, Extra: View>: View 
         isLoading: Bool,
         errorMessage: String?,
         reload: @escaping () async -> Void,
+        receiptAction: (() -> Void)? = nil,
         @ViewBuilder extraContent: @escaping (Detail) -> Extra,
         @ViewBuilder facts: @escaping (Detail) -> Facts
     ) {
@@ -287,6 +297,7 @@ struct MediaDetailScaffold<Detail: MediaDetail, Facts: View, Extra: View>: View 
         self.isLoading = isLoading
         self.errorMessage = errorMessage
         self.reload = reload
+        self.receiptAction = receiptAction
         self.facts = facts
         self.extraContent = extraContent
     }
@@ -345,6 +356,15 @@ struct MediaDetailScaffold<Detail: MediaDetail, Facts: View, Extra: View>: View 
                     }
                     .help("观看清单（⇧⌘D）")
                     .keyboardShortcut("d", modifiers: [.command, .shift])
+                }
+            }
+
+            if let receiptAction {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(action: receiptAction) {
+                        Label("分享卡", systemImage: "rectangle.portrait.on.rectangle.portrait.angled")
+                    }
+                    .help("生成分享卡（发朋友圈用）")
                 }
             }
         }
