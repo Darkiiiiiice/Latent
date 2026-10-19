@@ -569,9 +569,12 @@ struct MediaDetailScaffold<Detail: MediaDetail, Facts: View, Extra: View>: View 
     }
 }
 
-/// 演职员头像（64 圆形 + 姓名 + 角色，点击进入人物页）。
+/// 演职员头像（64 全圆 + 姓名 + 角色，点击进入人物页）。
 struct CastAvatar: View {
     let member: CastMember
+
+    /// 文字列宽（略宽于头像，减少截断；间距保证相邻两列不会贴在一起）。
+    private let textWidth: CGFloat = 88
 
     var body: some View {
         Button {
@@ -580,25 +583,30 @@ struct CastAvatar: View {
             VStack(spacing: UI.Spacing.s2) {
                 PosterImage(path: member.profilePath, displayWidth: UI.Sizes.castAvatar, cornerRadius: UI.Sizes.castAvatar / 2)
                     .frame(width: UI.Sizes.castAvatar, height: UI.Sizes.castAvatar)
+                    // 竖图按圆裁切（PosterImage 已按 frame 裁切，这里再收成整圆）
+                    .clipShape(Circle())
                     .overlay(Circle().strokeBorder(UI.Palette.border, lineWidth: 1))
 
                 Text(member.name)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(UI.Palette.textPrimary)
                     .lineLimit(1)
-                    .frame(width: 76)
+                    .multilineTextAlignment(.center)
+                    .frame(width: textWidth)
 
                 if let character = member.characterOrNil {
                     Text(character)
                         .font(.system(size: 11))
                         .foregroundStyle(UI.Palette.textSecondary)
                         .lineLimit(1)
-                        .frame(width: 76)
+                        .multilineTextAlignment(.center)
+                        .frame(width: textWidth)
                 }
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("查看 \(member.name)")
+        .help(member.characterOrNil.map { "查看 \(member.name)（\($0)）" } ?? "查看 \(member.name)")
     }
 }
 

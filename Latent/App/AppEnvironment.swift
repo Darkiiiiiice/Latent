@@ -30,7 +30,8 @@ final class AppEnvironment {
         let settings = AppSettings()
         self.settings = settings
         self.apiCache = ResponseCache()
-        self.imagePipeline = ImagePipeline()
+        // 全应用共用同一实例：设置页「清除图片缓存」清的就是视图实际使用的内存/磁盘缓存。
+        self.imagePipeline = .shared
 
         if let client {
             self.client = client
