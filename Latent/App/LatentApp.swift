@@ -11,6 +11,8 @@ struct LatentApp: App {
     init() {
         let container = LibraryContainerFactory.make()
         self.modelContainer = container
+        // App Intents 与主应用共享同一容器，避免二次打开 SwiftData 存储。
+        IntentContainerBox.shared.set(container)
         _environment = State(initialValue: AppEnvironment(container: container))
     }
 
@@ -53,6 +55,7 @@ struct RootView: View {
                 MainSplitView()
                     .task {
                         // 冷启动不等待网络：先渲染骨架，连接验证异步进行
+                        appEnv.refreshSpotlightIndex(immediately: true)
                         await appEnv.checkConnection()
                     }
             }
@@ -60,6 +63,29 @@ struct RootView: View {
         .background(UI.Palette.bg)
         .preferredColorScheme(settings.appearance.colorScheme)
         .overlay { ToastOverlay().environment(ToastCenter.shared) }
+        .fileExporter(
+            isPresented: Binding(
+                get: { appEnv.exports.request != nil },
+                set: { if !$0 { appEnv.exports.clear() } }
+            ),
+            document: appEnv.exports.request?.document,
+            contentType: appEnv.exports.request?.contentType ?? .json,
+            defaultFilename: appEnv.exports.request?.filename
+        ) { result in
+            appEnv.exports.clear()
+            switch result {
+            case .success:
+                ToastCenter.shared.show("已导出")
+            case .failure(let error):
+                ToastCenter.shared.show("导出失败：\(error.localizedDescription)")
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AppCommandBus.exportAllJSON)) { _ in
+            appEnv.export(.all, as: .json)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AppCommandBus.exportAllMarkdown)) { _ in
+            appEnv.export(.all, as: .markdown)
+        }
         .task {
             if hasToken == nil {
                 hasToken = await KeychainStore.shared.hasToken()

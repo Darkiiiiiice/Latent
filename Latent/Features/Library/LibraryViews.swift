@@ -28,6 +28,8 @@ struct LibraryView: View {
                     Spacer(minLength: 0)
 
                     if !items.isEmpty {
+                        ExportMenu(scope: kind == .favorites ? .favorites : .watchlist)
+
                         Picker("排序", selection: $sort) {
                             ForEach(SortOption.allCases, id: \.self) { option in
                                 Text(option.label).tag(option)
@@ -82,6 +84,8 @@ struct HistoryView: View {
                     Spacer(minLength: 0)
 
                     if appEnv.history.count > 0 {
+                        ExportMenu(scope: .history)
+
                         Button("清除全部") {
                             showsClearConfirmation = true
                         }

@@ -88,6 +88,9 @@ enum AppCommandBus {
     static let selectScope = Notification.Name("app.latent.command.selectScope")
     /// 在内容列 Push 详情（object = DetailDestination；详情页内跳转用）。
     static let pushDetail = Notification.Name("app.latent.command.pushDetail")
+    /// 导出全部库（文件菜单；根视图消费）。
+    static let exportAllJSON = Notification.Name("app.latent.command.exportAllJSON")
+    static let exportAllMarkdown = Notification.Name("app.latent.command.exportAllMarkdown")
 
     static func select(_ scope: SidebarScope) {
         NotificationCenter.default.post(name: selectScope, object: scope.rawValue)

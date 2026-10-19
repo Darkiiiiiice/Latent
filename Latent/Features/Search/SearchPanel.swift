@@ -15,6 +15,11 @@ struct SearchPanel: View {
     @State private var debouncer = Debouncer()
     @FocusState private var isFocused: Bool
 
+    init(isPresented: Binding<Bool>, initialQuery: String = "") {
+        _isPresented = isPresented
+        _query = State(initialValue: initialQuery)
+    }
+
     private var results: [SearchResult] { feed?.items ?? [] }
     private var isSearching: Bool { feed?.state.isLoadingAny ?? false }
 
@@ -74,7 +79,12 @@ struct SearchPanel: View {
         .background(UI.Palette.surfaceElevated, in: RoundedRectangle(cornerRadius: UI.Radius.button, style: .continuous))
         .hairlineBorder(UI.Palette.border, radius: UI.Radius.button)
         .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 8)
-        .onAppear { isFocused = true }
+        .onAppear {
+            isFocused = true
+            if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                scheduleSearch(query)
+            }
+        }
         .onExitCommand { isPresented = false }
     }
 

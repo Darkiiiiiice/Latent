@@ -17,6 +17,9 @@ final class LibraryStore {
     private(set) var favoriteItems: [LibrarySnapshot] = []
     private(set) var watchlistItems: [LibrarySnapshot] = []
 
+    /// 库内容变化（增删 / 详情回填）后的回调；AppEnvironment 用它刷新 Spotlight 索引。
+    var onChange: (() -> Void)?
+
     private var favoriteIDs: Set<String>
     private var watchlistIDs: Set<String>
 
@@ -145,6 +148,7 @@ final class LibraryStore {
         watchlistItems = Self.loadSnapshots(from: context, type: WatchlistItem.self)
         favoriteIDs = Set(favoriteItems.map(\.id))
         watchlistIDs = Set(watchlistItems.map(\.id))
+        onChange?()
     }
 
     private static func loadSnapshots<T: PersistentModel & LibraryRecord>(

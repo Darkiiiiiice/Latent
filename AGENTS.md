@@ -15,7 +15,7 @@
 4. **不做任何媒体播放**（无预告片、无内嵌播放器）；应用是纯元数据只读浏览器。
 5. 应用名与图标不使用 TMDB 商标；关于页固定展示 "This product uses the TMDB API but is not endorsed or certified by TMDB."。
 6. UI 遵循设计文档第 8 节：暗 / 浅双主题、单一强调色（星紫 `#7C6CFF`）、海报是唯一大色块、动效克制（120–220ms easeOut，无弹簧 / 粒子）、Reduce Motion 全降级。
-7. 分发定位自用：不做公证与上架，但 App Sandbox + Hardened Runtime 照常配置。
+7. 分发定位自用：不做公证与上架，但 App Sandbox + Hardened Runtime 照常配置。**App Intents / Spotlight 需要可验证 Team ID**：项目使用免费 Apple Development 个人团队（见 `project.yml` 的 `DEVELOPMENT_TEAM`）；不要改回 ad-hoc，否则 macOS 27 的 linkd 会以 `LNConnectionErrorDomain 1200` 拒绝。
 
 ## 工作方式
 

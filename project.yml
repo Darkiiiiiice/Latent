@@ -24,8 +24,11 @@ settings:
     SWIFT_APPROACHABLE_CONCURRENCY: YES
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
-    CODE_SIGN_IDENTITY: "-"
-    CODE_SIGN_STYLE: Manual
+    # App Intents / Shortcuts 在 macOS 27 要求可验证的 Team ID；
+    # 使用本机的免费 Apple Development 个人团队（无需付费账号）。
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: 95764LMVLY
+    CODE_SIGN_IDENTITY: "Apple Development"
     ENABLE_HARDENED_RUNTIME: YES
     SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: YES
     ENABLE_USER_SCRIPT_SANDBOXING: YES
@@ -51,7 +54,8 @@ targets:
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
         GENERATE_INFOPLIST_FILE: YES
         ENABLE_APP_SANDBOX: YES
-        ENABLE_USER_SELECTED_FILES: readonly
+        # 导出 JSON / Markdown 需要写入用户在保存面板中选择的位置。
+        ENABLE_USER_SELECTED_FILES: readwrite
         ENABLE_INCOMING_NETWORK_CONNECTIONS: NO
         ENABLE_OUTGOING_NETWORK_CONNECTIONS: YES
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
@@ -62,6 +66,7 @@ targets:
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
+        com.apple.security.files.user-selected.read-write: true
 
   LatentTests:
     type: bundle.unit-test

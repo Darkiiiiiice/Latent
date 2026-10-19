@@ -8,7 +8,7 @@ macOS 上的 TMDB 元数据浏览器：搜索电影、剧集与人物，浏览�
 
 ## 状态
 
-**v1 完成（P0–P4）。** 视觉 / 动效 / 无障碍人工走查通过；按「自用」定位不做公证与上架。设计文档是唯一事实来源：
+**v1 完成（P0–P4），v1.1 系统集成与导出完成。** 视觉 / 动效 / 无障碍人工走查通过；按「自用」定位不做公证与上架。设计文档是唯一事实来源：
 
 - [`docs/设计文档.md`](docs/设计文档.md) —— 目标与约束 / TMDB API 设计 / 架构 / 图片管线 / UI 设计系统 / 里程碑（P0–P4）/ 验收与测试
 
@@ -19,10 +19,12 @@ macOS 上的 TMDB 元数据浏览器：搜索电影、剧集与人物，浏览�
 - **发现**：类型多选、年份区间、最低评分、排序，筛选变化防抖刷新，无限滚动
 - **详情**：Hero、简介折叠、演职员、剧照、相似 / 推荐；剧集含季选择器与分集明细；人物页含作品年表
 - **本地库**：收藏 / 观看清单 / 历史（SwiftData 纯本地），右键菜单、Toast 反馈
+- **系统集成**：App Intents / Shortcuts（搜索作品、打开作品、按 TMDB ID 打开、打开搜索）；收藏 / 清单经 `IndexedEntity` 写入 Spotlight，点击结果直达详情
+- **数据出口**：收藏 / 观看清单 / 历史 / 全部库导出 JSON / Markdown（`FileExporter` 本地保存）
 - **设置**：Token 验证、语言、外观、网络代理、缓存统计与清理（`⌘,`）
 - **基础设施**：Keychain 存 Token、URLSession 代理、响应缓存 TTL、图片管线（内存 + 磁盘 LRU + ImageIO 下采样）、暗 / 浅双主题与 Reduce Motion 降级
 
-测试：`xcodebuild test -project Latent.xcodeproj -scheme Latent` —— **85 项、15 个套件全绿**（Swift Testing + URLProtocol stub + fixture JSON + 内存 SwiftData 容器；含真实沙箱环境下的 Keychain 用例）。
+测试：`xcodebuild test -project Latent.xcodeproj -scheme Latent` —— **96 项、17 个套件全绿**（Swift Testing + URLProtocol stub + fixture JSON + 内存 SwiftData 容器；含真实沙箱环境下的 Keychain 用例）。
 
 性能基线（M1 Pro，Debug 自用构建）：空闲 CPU **0.0%**（5 秒采样）、首屏加载后常驻内存约 **125MB**、网格滚动流畅。窗口尺寸与位置由 SwiftUI `WindowGroup` 自动恢复。
 
@@ -32,6 +34,7 @@ macOS 上的 TMDB 元数据浏览器：搜索电影、剧集与人物，浏览�
 - 数据：SwiftData 纯本地（无 iCloud / CloudKit）；Token 仅本机 Keychain，不入库、不写日志
 - 纯元数据只读：不做任何媒体播放（无预告片）；人物页与发现页在 v1；剧集含分集明细
 - 界面：暗 / 浅双主题、单一强调色、海报是唯一大色块；不使用 `repeatForever` 无限动画
+- 系统集成：App Intents / Spotlight 需要可验证 Team ID；使用免费 Apple Development 个人团队（`project.yml` 的 `DEVELOPMENT_TEAM`），不要改回 ad-hoc（linkd 会以 `LNConnectionErrorDomain 1200` 拒绝）
 - 分发：自用（无付费开发者账号，不做公证与上架）
 
 ## 环境
@@ -67,8 +70,9 @@ Latent/
 │   └── make_appicon.py  # 应用图标生成脚本（源稿 → AppIcon.appiconset 全套）
 ├── Latent/              # 应用源码
 │   ├── App/             # 入口、依赖容器、菜单、导航模型
-│   ├── Core/            # 网络 / 模型 / 持久化 / 图片管线 / 工具（不 import SwiftUI）
-│   ├── Features/        # 引导 / 主界面 / 趋势 / 搜索 / 详情 / 库 / 设置
+│   ├── Core/            # 网络 / 模型 / 持久化 / 导出 / 图片管线 / 工具（不 import SwiftUI）
+│   ├── Features/        # 引导 / 主界面 / 趋势 / 搜索 / 详情 / 库 / 导出 / 设置
+│   ├── Integrations/    # App Intents / Shortcuts / Spotlight / 意图路由
 │   ├── UI/              # 设计 tokens 与通用组件
 │   └── Resources/       # Assets（颜色资产 + AppIcon）、entitlements
 └── LatentTests/         # Swift Testing 单测与集成测试（fixture 在 Fixtures/）
@@ -77,7 +81,7 @@ Latent/
 ## 常见问题
 
 - **国内直连不通**：`设置（⌘,）→ 网络 → 代理` 选「手动」，填 HTTP(S) 或 SOCKS5 的主机与端口（如 `127.0.0.1:7890`），改完点「重新验证」。首次启动若 shell 里有 `https_proxy`，会**自动预填**一次（从 Finder 双击启动读不到环境变量）。
-- **弹出钥匙串授权对话框**：ad-hoc 签名（自用构建）的钥匙串条目按代码签名设 ACL，少数情况下读取 Token 时会弹一次「想要使用您存储在钥匙串中的机密信息」——选「始终允许」即可。若对话框被误关，钥匙串操作会一直阻塞，可在「活动监视器」结束 `SecurityAgent` 后重试。
+- **弹出钥匙串授权对话框**：Keychain 条目按代码签名设 ACL。项目现在用免费 Apple Development 个人团队签名；首次从旧的 ad-hoc 构建切换、或换证书重新签名后，读取 Token 可能弹一次「想要使用您存储在钥匙串中的机密信息」——选「始终允许」即可。若对话框被误关，钥匙串操作会一直阻塞，可在「活动监视器」结束 `SecurityAgent` 后重试。
 
 ## 许可与署名
 

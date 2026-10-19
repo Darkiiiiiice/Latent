@@ -11,6 +11,8 @@ struct MainSplitView: View {
     @State private var path = NavigationPath()
     @State private var lastDestination: DetailDestination?
     @State private var isSearchPresented = false
+    @State private var searchSeed = ""
+    @State private var searchGeneration = 0
     @State private var searchFocus = false
     @AppStorage("view.gridMode") private var gridMode = true
 
@@ -30,7 +32,8 @@ struct MainSplitView: View {
         .background(UI.Palette.bg)
         .overlay(alignment: .topTrailing) {
             if isSearchPresented {
-                SearchPanel(isPresented: $isSearchPresented)
+                SearchPanel(isPresented: $isSearchPresented, initialQuery: searchSeed)
+                    .id(searchGeneration)
                     .environment(appEnv)
                     .environment(settings)
                     .padding(.top, 6)
@@ -38,7 +41,17 @@ struct MainSplitView: View {
                     .transition(.opacity)
             }
         }
+        .onAppear {
+            handleIntentRoute()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: IntentRouter.didRequest)) { _ in
+            handleIntentRoute()
+        }
         .onReceive(NotificationCenter.default.publisher(for: AppCommandBus.focusSearch)) { _ in
+            if !isSearchPresented {
+                searchSeed = ""
+                searchGeneration += 1
+            }
             isSearchPresented = true
         }
         .onReceive(NotificationCenter.default.publisher(for: AppCommandBus.back)) { _ in
@@ -134,6 +147,23 @@ struct MainSplitView: View {
         guard let destination = DetailDestination.from(summary) else { return }
         lastDestination = destination
         path.append(destination)
+    }
+
+    /// 消费 App Intents / Spotlight 导航请求（冷启动由 onAppear 消费）。
+    private func handleIntentRoute() {
+        guard let destination = IntentRouter.shared.consume() else { return }
+        Log.intents.info("MainSplitView 消费路由：\(String(describing: destination), privacy: .public)")
+        switch destination {
+        case .detail(let detail):
+            if lastDestination != detail {
+                lastDestination = detail
+                path.append(detail)
+            }
+        case .search(let query):
+            searchSeed = query
+            searchGeneration += 1
+            isSearchPresented = true
+        }
     }
 }
 

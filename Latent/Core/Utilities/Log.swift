@@ -13,4 +13,10 @@ enum Log {
     static let store = Logger(subsystem: subsystem, category: "store")
     /// UI 层异常（缓存清除、外观等）。
     static let ui = Logger(subsystem: subsystem, category: "ui")
+    /// 导出（JSON / Markdown）。
+    static let export = Logger(subsystem: subsystem, category: "export")
+    /// App Intents / Shortcuts / 路由。
+    static let intents = Logger(subsystem: subsystem, category: "intents")
+    /// Spotlight 索引。
+    static let spotlight = Logger(subsystem: subsystem, category: "spotlight")
 }

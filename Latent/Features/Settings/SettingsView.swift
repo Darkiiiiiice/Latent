@@ -107,6 +107,21 @@ struct SettingsView: View {
             }
             .disabled(settings.recentSearches.isEmpty)
         }
+
+        Section("数据") {
+            Text("导出收藏、观看清单与浏览历史，不包含 Token、代理与缓存。")
+                .font(.system(size: 11))
+                .foregroundStyle(UI.Palette.textSecondary)
+
+            HStack(spacing: UI.Spacing.s3) {
+                Button("导出全部（JSON）…") {
+                    appEnv.export(.all, as: .json)
+                }
+                Button("导出全部（Markdown）…") {
+                    appEnv.export(.all, as: .markdown)
+                }
+            }
+        }
     }
 
     // MARK: - 网络

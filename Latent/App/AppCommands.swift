@@ -35,6 +35,17 @@ struct AppCommands: Commands {
             .keyboardShortcut("f", modifiers: .command)
         }
 
+        // 文件菜单：导出全部库（本地 JSON / Markdown）
+        CommandGroup(after: .saveItem) {
+            Divider()
+            Button("导出全部库为 JSON…") {
+                NotificationCenter.default.post(name: AppCommandBus.exportAllJSON, object: nil)
+            }
+            Button("导出全部库为 Markdown…") {
+                NotificationCenter.default.post(name: AppCommandBus.exportAllMarkdown, object: nil)
+            }
+        }
+
         // 帮助菜单：关于显影 + TMDB 署名
         CommandGroup(replacing: .help) {
             Link("关于显影", destination: URL(string: "https://www.themoviedb.org")!)
