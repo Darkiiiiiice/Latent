@@ -6,7 +6,6 @@ import SwiftUI
 struct MainSplitView: View {
     @Environment(AppEnvironment.self) private var appEnv
     @Environment(AppSettings.self) private var settings
-    @Environment(\.openSettings) private var openSettings
 
     @State private var scope: SidebarScope = .trending
     @State private var path = NavigationPath()
@@ -109,9 +108,9 @@ struct MainSplitView: View {
             .frame(width: 74)
             .help("网格 / 列表")
 
-            Button {
-                openSettings()
-            } label: {
+            // SettingsLink 是打开设置场景的正确入口：应用未激活时会先激活应用，
+            // 避免窗口被创建后停在屏幕外（onscreen=false）。
+            SettingsLink {
                 Image(systemName: "gearshape")
             }
             .help("设置（⌘,）")
@@ -203,6 +202,7 @@ struct ConnectionStatusView: View {
     @Environment(AppSettings.self) private var settings
     @State private var pulsing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
 
     private var state: AppEnvironment.ConnectionState { appEnv.connectionState }
 
@@ -224,10 +224,16 @@ struct ConnectionStatusView: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Circle()
-                .fill(color)
-                .frame(width: 6, height: 6)
-                .opacity(pulsing ? 0.35 : 1)
+            BreathingFill(
+                color: color,
+                cornerRadius: 3,
+                lowOpacity: 0.35,
+                highOpacity: 1,
+                duration: UI.Motion.Breath.statusDot,
+                animated: pulsing && !reduceMotion,
+                colorScheme: colorScheme
+            )
+            .frame(width: 6, height: 6)
             Text("\(label) · \(settings.language)")
                 .font(.system(size: 11))
                 .foregroundStyle(UI.Palette.textSecondary)
@@ -254,7 +260,7 @@ struct ConnectionStatusView: View {
     private func updatePulse() {
         guard !reduceMotion else { return }
         if case .unknown = state {
-            withAnimation(UI.Motion.statusPulse.repeatForever(autoreverses: true)) { pulsing = true }
+            pulsing = true
         } else {
             pulsing = false
         }

@@ -17,6 +17,7 @@ struct PosterImage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var image: CGImage?
     @State private var isLoaded = false
+    @State private var didFail = false
 
     var body: some View {
         // Color.clear 只负责「取外部 frame 的尺寸」；图片与占位都画在 overlay 里。
@@ -35,7 +36,7 @@ struct PosterImage: View {
                 .resizable()
                 .aspectRatio(contentMode: contentMode)
                 .opacity(isLoaded ? 1 : 0)
-        } else if path == nil {
+        } else if path == nil || didFail {
             placeholder
         } else {
             Skeleton.block(cornerRadius: cornerRadius)
@@ -49,6 +50,7 @@ struct PosterImage: View {
     private func load() async {
         image = nil
         isLoaded = false
+        didFail = false
         guard let path, !path.isEmpty else { return }
 
         do {
@@ -61,7 +63,9 @@ struct PosterImage: View {
                 withAnimation(UI.Motion.imageFade) { isLoaded = true }
             }
         } catch {
-            // 管线已自动重试一次；仍失败保持占位（静默）
+            guard !Task.isCancelled else { return }
+            // 管线已自动重试一次；仍失败则切静态占位（设计文档：失败静默保留占位）。
+            didFail = true
         }
     }
 
@@ -79,32 +83,32 @@ struct PosterImage: View {
 /// 骨架屏（1.2s 呼吸；Reduce Motion 时静止）。
 struct Skeleton: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var dimmed = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    var cornerRadius: CGFloat = 0
 
     static func block(cornerRadius: CGFloat = UI.Radius.poster) -> some View {
-        Skeleton()
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        Skeleton(cornerRadius: cornerRadius)
     }
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 0, style: .continuous)
-            .fill(UI.Palette.surfaceElevated)
-            .opacity(dimmed ? 0.5 : 0.8)
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(UI.Motion.breathe.repeatForever(autoreverses: true)) {
-                    dimmed = true
-                }
-            }
+        BreathingFill(
+            color: UI.Palette.surfaceElevated,
+            cornerRadius: cornerRadius,
+            lowOpacity: 0.5,
+            highOpacity: 0.8,
+            duration: UI.Motion.Breath.skeleton,
+            animated: !reduceMotion,
+            colorScheme: colorScheme
+        )
     }
 
     /// 文本条（标题 / 元信息两行）。
     static func textLines(width: CGFloat, lines: Int = 2) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(0..<lines, id: \.self) { index in
-                Skeleton()
+                Skeleton(cornerRadius: 2)
                     .frame(width: index == 0 ? width : width * 0.6, height: 9)
-                    .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
                     .opacity(0.6)
             }
         }

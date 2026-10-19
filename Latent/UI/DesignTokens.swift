@@ -63,9 +63,14 @@ enum UI {
         static let hover: Animation = .easeOut(duration: 0.12)
         static let cardLift: Animation = .easeOut(duration: 0.14)
         static let imageFade: Animation = .easeOut(duration: 0.15)
-        static let statusPulse: Animation = .easeInOut(duration: 0.8)
-        /// 状态点呼吸 / 骨架呼吸
-        static let breathe: Animation = .easeInOut(duration: 1.2)
+
+        /// 呼吸类动效的单程时长（秒，autoreverses 后为往返周期的一半）。
+        /// 由 Core Animation 驱动（见 `BreathingFill`）——不要改回 SwiftUI `repeatForever`：
+        /// macOS 27 上无限动画会滞留在显示周期里，导致整窗每帧重排、CPU 空转。
+        enum Breath {
+            static let statusDot: Double = 0.8
+            static let skeleton: Double = 1.2
+        }
     }
 
     // MARK: - 阴影（仅 hover 卡片与 Toast）

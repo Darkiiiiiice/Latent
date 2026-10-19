@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import QuartzCore
 
 /// 评分细环（设计文档第 8.4 节）：1.5px 细环 + 等宽数字；≥8.0 success，其余 accent。
 struct RatingRing: View {
@@ -219,5 +220,59 @@ enum Pasteboard {
     static func copy(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+    }
+}
+
+/// CA 驱动的呼吸色块（骨架屏 / 连接状态点共用）。
+///
+/// 不使用 SwiftUI 的 `repeatForever`：在 macOS 27 上无限动画会一直留在显示周期里，
+/// 造成整窗每帧重排（实测：工具栏齿轮图标无限"飞行"、CPU 空转 40%+，且视图移除后仍不停）。
+/// Core Animation 由渲染服务端驱动，空闲时不占主线程。
+struct BreathingFill: NSViewRepresentable {
+    var color: Color
+    var cornerRadius: CGFloat = 0
+    var lowOpacity: Double
+    var highOpacity: Double
+    /// 单程时长（autoreverses 后为往返周期的一半）。
+    var duration: Double
+    var animated: Bool
+    /// 仅作为依赖项：外观切换时强制刷新动态颜色。
+    var colorScheme: ColorScheme
+
+    private let animationKey = "latent.breathe"
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        view.wantsLayer = true
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        guard let layer = view.layer else { return }
+        var resolved: NSColor?
+        view.effectiveAppearance.performAsCurrentDrawingAppearance {
+            resolved = NSColor(color)
+        }
+        layer.backgroundColor = resolved?.cgColor
+        layer.cornerRadius = cornerRadius
+        layer.cornerCurve = .continuous
+        layer.masksToBounds = true
+
+        if animated {
+            layer.opacity = Float(highOpacity)
+            if layer.animation(forKey: animationKey) == nil {
+                let animation = CABasicAnimation(keyPath: "opacity")
+                animation.fromValue = highOpacity
+                animation.toValue = lowOpacity
+                animation.duration = duration
+                animation.autoreverses = true
+                animation.repeatCount = .infinity
+                animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                layer.add(animation, forKey: animationKey)
+            }
+        } else {
+            layer.removeAnimation(forKey: animationKey)
+            layer.opacity = Float(highOpacity)
+        }
     }
 }
