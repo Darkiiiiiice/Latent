@@ -110,6 +110,37 @@
     "total_pages": 1,
     "total_results": 1
   },
+  "watch/providers": {
+    "results": {
+      "CN": {
+        "link": "https://www.themoviedb.org/movie/693134/watch?locale=CN",
+        "flatrate": [
+          { "provider_id": 350, "provider_name": "爱奇艺", "logo_path": "/iqiyi.jpg", "display_priority": 1 }
+        ],
+        "rent": [
+          { "provider_id": 2, "provider_name": "Apple TV", "logo_path": "/apple.jpg", "display_priority": 2 }
+        ]
+      },
+      "US": {
+        "link": "https://www.themoviedb.org/movie/693134/watch?locale=US",
+        "free": [
+          { "provider_id": 192, "provider_name": "YouTube", "logo_path": "/youtube.jpg", "display_priority": 3 }
+        ],
+        "ads": [
+          { "provider_id": 192, "provider_name": "YouTube", "logo_path": "/youtube.jpg", "display_priority": 3 }
+        ],
+        "flatrate": [
+          { "provider_id": 8, "provider_name": "Netflix", "logo_path": "/netflix.jpg", "display_priority": 4 }
+        ],
+        "buy": [
+          { "provider_id": 2, "provider_name": "Apple TV", "logo_path": "/apple.jpg", "display_priority": 2 }
+        ]
+      },
+      "JP": {
+        "link": "https://www.themoviedb.org/movie/693134/watch?locale=JP"
+      }
+    }
+  },
   "release_dates": {
     "results": [
       {

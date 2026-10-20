@@ -13,8 +13,20 @@ struct EndpointTests {
 
         #expect(url.path == "/3/movie/693134")
         #expect(items.contains { $0.name == "language" && $0.value == "zh-CN" })
-        #expect(items.contains { $0.name == "append_to_response" && $0.value == "credits,images,similar,recommendations,external_ids,release_dates" })
+        #expect(items.contains { $0.name == "append_to_response" && $0.value == "credits,images,similar,recommendations,external_ids,release_dates,watch/providers" })
         #expect(items.contains { $0.name == "include_image_language" && $0.value == "zh,en,null" })
+    }
+
+    @Test("剧集详情端点：append 含观看平台")
+    func tvDetailQuery() {
+        let url = EndpointURLBuilder.url(for: .tvDetail(id: 66732), language: "zh-CN")
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
+
+        #expect(url.path == "/3/tv/66732")
+        #expect(items.contains {
+            $0.name == "append_to_response"
+                && $0.value == "credits,images,similar,recommendations,external_ids,content_ratings,watch/providers"
+        })
     }
 
     @Test("搜索端点：query、分页、include_adult")

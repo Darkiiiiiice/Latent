@@ -458,6 +458,7 @@ struct MediaDetailScaffold<Detail: MediaDetail, Facts: View, Extra: View>: View 
             VStack(alignment: .leading, spacing: UI.Spacing.s6) {
                 extraContent(detail)
                 overviewSection(detail)
+                watchSection(detail)
                 creditsSection(detail)
                 railSection(title: "剧照", items: detail.images?.stills.map(\.filePath) ?? [], width: 168, height: 95, cornerRadius: 4)
                 railSection(title: "相似", media: detail.similar ?? [], open: openSummary)
@@ -513,6 +514,14 @@ struct MediaDetailScaffold<Detail: MediaDetail, Facts: View, Extra: View>: View 
                     .font(.system(size: 13))
                     .foregroundStyle(UI.Palette.textSecondary)
             }
+        }
+    }
+
+    /// 观看平台：没有数据时整段隐藏。
+    @ViewBuilder
+    private func watchSection(_ detail: Detail) -> some View {
+        if let providers = detail.watchProviders {
+            WatchProvidersSection(providers: providers)
         }
     }
 
@@ -650,5 +659,128 @@ struct SectionHeader: View {
                 .fill(UI.Palette.border)
                 .frame(height: 1)
         }
+    }
+}
+
+/// 观看平台区块：订阅 / 免费 / 广告合并为「在线看」，租借与购买分列；无地区可显示时整段隐藏。
+struct WatchProvidersSection: View {
+    let providers: WatchProviders
+
+    /// 用户手动选择的地区；nil 表示用默认地区（中国大陆优先）。
+    @State private var selectedRegionCode: String?
+
+    var body: some View {
+        if let region = providers.region(for: selectedRegionCode) {
+            let regions = providers.availableRegions
+            VStack(alignment: .leading, spacing: UI.Spacing.s3) {
+                HStack(alignment: .firstTextBaseline, spacing: UI.Spacing.s2) {
+                    Text("在哪看")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(UI.Palette.textPrimary)
+
+                    if regions.count > 1 {
+                        Menu {
+                            ForEach(regions) { option in
+                                Button {
+                                    selectedRegionCode = option.code
+                                } label: {
+                                    if option.code == region.code {
+                                        Label(option.name, systemImage: "checkmark")
+                                    } else {
+                                        Text(option.name)
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 2) {
+                                Text(region.name)
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 8, weight: .semibold))
+                            }
+                            .font(.system(size: 11))
+                            .foregroundStyle(UI.Palette.textSecondary)
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                        .help("切换观看地区")
+                    } else {
+                        Text(region.name)
+                            .font(.system(size: 11))
+                            .foregroundStyle(UI.Palette.textSecondary)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+
+                Rectangle()
+                    .fill(UI.Palette.border)
+                    .frame(height: 1)
+
+                ForEach(region.region.groups) { group in
+                    HStack(alignment: .center, spacing: UI.Spacing.s3) {
+                        Text(group.kind.label)
+                            .font(.system(size: 11))
+                            .foregroundStyle(UI.Palette.textSecondary)
+                            .frame(width: 48, alignment: .leading)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: UI.Spacing.s2) {
+                                ForEach(group.providers) { provider in
+                                    WatchProviderBadge(provider: provider)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if let link = region.region.link {
+                    Link(destination: link) {
+                        HStack(spacing: 2) {
+                            Text("在 TMDB 查看全部渠道")
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 9, weight: .semibold))
+                        }
+                        .font(.system(size: 11))
+                        .foregroundStyle(UI.Palette.accent)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+}
+
+/// 单个观看平台：白色底托住透明 Logo，右侧跟平台名。
+struct WatchProviderBadge: View {
+    let provider: WatchProvider
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(Color.white)
+                PosterImage(
+                    path: provider.logoPath,
+                    displayWidth: 22,
+                    cornerRadius: 4,
+                    contentMode: .fit
+                )
+                .padding(2)
+            }
+            .frame(width: 24, height: 24)
+
+            Text(provider.providerName)
+                .font(.system(size: 11))
+                .foregroundStyle(UI.Palette.textPrimary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, UI.Spacing.s2)
+        .padding(.vertical, 5)
+        .background {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(UI.Palette.surface)
+        }
+        .hairlineBorder(radius: 7)
+        .help(provider.providerName)
     }
 }

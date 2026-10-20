@@ -93,13 +93,13 @@ enum Endpoint: Sendable, Hashable {
         case .movieDetail:
             return [
                 URLQueryItem(name: "language", value: language),
-                URLQueryItem(name: "append_to_response", value: "credits,images,similar,recommendations,external_ids,release_dates"),
+                URLQueryItem(name: "append_to_response", value: "credits,images,similar,recommendations,external_ids,release_dates,watch/providers"),
                 URLQueryItem(name: "include_image_language", value: "zh,en,null"),
             ]
         case .tvDetail:
             return [
                 URLQueryItem(name: "language", value: language),
-                URLQueryItem(name: "append_to_response", value: "credits,images,similar,recommendations,external_ids,content_ratings"),
+                URLQueryItem(name: "append_to_response", value: "credits,images,similar,recommendations,external_ids,content_ratings,watch/providers"),
                 URLQueryItem(name: "include_image_language", value: "zh,en,null"),
             ]
         case .tvSeason:

@@ -79,6 +79,7 @@ struct DecodingTests {
         #expect(detail.images?.stills.count == 1)
         #expect(detail.similar?.count == 1)
         #expect(detail.recommendations?.count == 1)
+        #expect(detail.watchProviders?.region(for: nil)?.code == "CN")
 
         let facts = detail.facts
         #expect(facts.contains { $0.label == "时长" && $0.value == "2 小时 46 分" })
@@ -96,6 +97,37 @@ struct DecodingTests {
         #expect(detail.seasons?[2].displayName == "特别篇")
         #expect(detail.lastAirDate == "2022-07-01")
         #expect(detail.createdBy?.first?.name == "Duffer Brothers")
+        #expect(detail.watchProviders?.region(for: nil)?.code == "US")
+    }
+
+    @Test("观看平台：地区排序、跳过空地区、分组去重")
+    func watchProviders() throws {
+        let detail = try decoder.decode(MovieDetail.self, from: Fixtures.data("movie_detail"))
+        let providers = try #require(detail.watchProviders)
+
+        // JP 只有 link、没有渠道，不进入地区菜单。
+        #expect(providers.availableRegions.map(\.code) == ["CN", "US"])
+        #expect(providers.region(for: nil)?.code == "CN")
+        #expect(providers.region(for: "US")?.code == "US")
+        #expect(providers.region(for: "JP")?.code == "CN") // 无渠道 → 回退默认
+        #expect(providers.region(for: "ZZ")?.code == "CN")
+
+        let cn = try #require(providers.region(for: "CN"))
+        #expect(cn.region.groups.map(\.kind) == [.stream, .rent])
+        #expect(cn.region.groups[0].providers.map(\.providerName) == ["爱奇艺"])
+        #expect(cn.region.link?.absoluteString.contains("locale=CN") == true)
+
+        let us = try #require(providers.region(for: "US"))
+        #expect(us.region.groups.map(\.kind) == [.stream, .buy])
+        // free 与 ads 里的同一个平台合并，只出现一次；按 display_priority 排序。
+        #expect(us.region.groups[0].providers.map(\.providerName) == ["YouTube", "Netflix"])
+    }
+
+    @Test("观看平台：空结果时整段隐藏")
+    func watchProvidersEmpty() {
+        let providers = WatchProviders(results: ["CN": WatchRegion()])
+        #expect(providers.availableRegions.isEmpty)
+        #expect(providers.region(for: nil) == nil)
     }
 
     @Test("分集：缺简介 / 缺剧照 / 部分字段缺失均不崩溃")

@@ -111,5 +111,15 @@
   },
   "similar": { "page": 1, "results": [], "total_pages": 1, "total_results": 0 },
   "recommendations": { "page": 1, "results": [], "total_pages": 1, "total_results": 0 },
+  "watch/providers": {
+    "results": {
+      "US": {
+        "link": "https://www.themoviedb.org/tv/66732/watch?locale=US",
+        "flatrate": [
+          { "provider_id": 8, "provider_name": "Netflix", "logo_path": "/netflix.jpg", "display_priority": 1 }
+        ]
+      }
+    }
+  },
   "content_ratings": { "results": [] }
 }

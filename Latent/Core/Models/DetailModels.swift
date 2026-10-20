@@ -1,6 +1,6 @@
 import Foundation
 
-/// 电影详情（GET /3/movie/{id}，append_to_response=credits,images,similar,recommendations,external_ids,release_dates）。
+/// 电影详情（GET /3/movie/{id}，append_to_response=credits,images,similar,recommendations,external_ids,release_dates,watch/providers）。
 struct MovieDetail: MediaDetail, Decodable, Sendable {
     let id: Int
     let title: String
@@ -21,6 +21,7 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
     let images: MediaImages?
     let similar: [MediaSummary]?
     let recommendations: [MediaSummary]?
+    let watchProviders: WatchProviders?
     let runtime: Int?
     let budget: Int?
     let revenue: Int?
@@ -37,6 +38,7 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         case voteCount = "vote_count"
         case originalLanguage = "original_language"
         case externalIDs = "external_ids"
+        case watchProviders = "watch/providers"
         case credits, images, similar, recommendations
     }
 
@@ -47,8 +49,8 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         tagline: String? = nil, status: String? = nil, originalLanguage: String? = nil,
         homepage: URL? = nil, externalIDs: ExternalIDs? = nil, credits: Credits? = nil,
         images: MediaImages? = nil, similar: [MediaSummary]? = nil,
-        recommendations: [MediaSummary]? = nil, runtime: Int? = nil,
-        budget: Int? = nil, revenue: Int? = nil
+        recommendations: [MediaSummary]? = nil, watchProviders: WatchProviders? = nil,
+        runtime: Int? = nil, budget: Int? = nil, revenue: Int? = nil
     ) {
         self.id = id
         self.title = title
@@ -69,6 +71,7 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         self.images = images
         self.similar = similar
         self.recommendations = recommendations
+        self.watchProviders = watchProviders
         self.runtime = runtime
         self.budget = budget
         self.revenue = revenue
@@ -99,6 +102,7 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         let recommendationsPage = (try? container.decodeIfPresent(Paged<MediaSummary>.self, forKey: .recommendations)) ?? nil
         self.similar = similarPage?.items
         self.recommendations = recommendationsPage?.items
+        self.watchProviders = (try? container.decodeIfPresent(WatchProviders.self, forKey: .watchProviders)) ?? nil
         self.runtime = (try? container.decodeIfPresent(Int.self, forKey: .runtime)) ?? nil
         self.budget = (try? container.decodeIfPresent(Int.self, forKey: .budget)) ?? nil
         self.revenue = (try? container.decodeIfPresent(Int.self, forKey: .revenue)) ?? nil
@@ -117,7 +121,7 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
     }
 }
 
-/// 剧集详情（GET /3/tv/{id}，append_to_response=credits,images,similar,recommendations,external_ids,content_ratings）。
+/// 剧集详情（GET /3/tv/{id}，append_to_response=credits,images,similar,recommendations,external_ids,content_ratings,watch/providers）。
 struct TVShowDetail: MediaDetail, Decodable, Sendable {
     let id: Int
     let name: String
@@ -138,6 +142,7 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
     let images: MediaImages?
     let similar: [MediaSummary]?
     let recommendations: [MediaSummary]?
+    let watchProviders: WatchProviders?
     let numberOfSeasons: Int?
     let numberOfEpisodes: Int?
     let seasons: [Season]?
@@ -162,6 +167,7 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
         case voteCount = "vote_count"
         case originalLanguage = "original_language"
         case externalIDs = "external_ids"
+        case watchProviders = "watch/providers"
         case credits, images, similar, recommendations
         case numberOfSeasons = "number_of_seasons"
         case numberOfEpisodes = "number_of_episodes"
@@ -177,7 +183,8 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
         tagline: String? = nil, status: String? = nil, originalLanguage: String? = nil,
         homepage: URL? = nil, externalIDs: ExternalIDs? = nil, credits: Credits? = nil,
         images: MediaImages? = nil, similar: [MediaSummary]? = nil,
-        recommendations: [MediaSummary]? = nil, numberOfSeasons: Int? = nil,
+        recommendations: [MediaSummary]? = nil, watchProviders: WatchProviders? = nil,
+        numberOfSeasons: Int? = nil,
         numberOfEpisodes: Int? = nil, seasons: [Season]? = nil,
         episodeRunTime: [Int]? = nil, lastAirDate: String? = nil,
         networks: [Network]? = nil, createdBy: [Creator]? = nil
@@ -201,6 +208,7 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
         self.images = images
         self.similar = similar
         self.recommendations = recommendations
+        self.watchProviders = watchProviders
         self.numberOfSeasons = numberOfSeasons
         self.numberOfEpisodes = numberOfEpisodes
         self.seasons = seasons
@@ -235,6 +243,7 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
         let recommendationsPage = (try? container.decodeIfPresent(Paged<MediaSummary>.self, forKey: .recommendations)) ?? nil
         self.similar = similarPage?.items
         self.recommendations = recommendationsPage?.items
+        self.watchProviders = (try? container.decodeIfPresent(WatchProviders.self, forKey: .watchProviders)) ?? nil
         self.numberOfSeasons = (try? container.decodeIfPresent(Int.self, forKey: .numberOfSeasons)) ?? nil
         self.numberOfEpisodes = (try? container.decodeIfPresent(Int.self, forKey: .numberOfEpisodes)) ?? nil
         self.seasons = (try? container.decodeIfPresent([Season].self, forKey: .seasons)) ?? nil

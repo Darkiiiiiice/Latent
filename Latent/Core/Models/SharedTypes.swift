@@ -23,6 +23,8 @@ protocol MediaDetail: Sendable {
     var images: MediaImages? { get }
     var similar: [MediaSummary]? { get }
     var recommendations: [MediaSummary]? { get }
+    /// 观看平台（append_to_response=watch/providers）。
+    var watchProviders: WatchProviders? { get }
     /// 事实栏行（各详情类型自带）。
     var facts: [(label: String, value: String)] { get }
 
