@@ -43,7 +43,7 @@ struct MovieDetailView: View {
         .task(id: movieID) { await load() }
         .sheet(isPresented: $showsReceipt) {
             if let movie {
-                ReceiptSheet(movie: movie)
+                ReceiptSheet(data: ReceiptData.build(from: movie))
             }
         }
     }
@@ -86,6 +86,7 @@ struct TVShowDetailView: View {
     @State private var seasonDetail: SeasonDetail?
     @State private var seasonError: String?
     @State private var isLoadingSeason = false
+    @State private var showsReceipt = false
 
     var body: some View {
         MediaDetailScaffold(
@@ -94,6 +95,7 @@ struct TVShowDetailView: View {
             isLoading: isLoading,
             errorMessage: errorMessage,
             reload: { await load() },
+            receiptAction: show == nil ? nil : { showsReceipt = true },
             extraContent: { detail in
                 seasonSection(detail)
             }
@@ -101,6 +103,11 @@ struct TVShowDetailView: View {
             factsSection(detail)
         }
         .task(id: showID) { await load() }
+        .sheet(isPresented: $showsReceipt) {
+            if let show {
+                ReceiptSheet(data: ReceiptData.build(from: show))
+            }
+        }
     }
 
     private func factsSection(_ detail: TVShowDetail) -> some View {
@@ -267,7 +274,7 @@ struct MediaDetailScaffold<Detail: MediaDetail, Facts: View, Extra: View>: View 
     let isLoading: Bool
     let errorMessage: String?
     let reload: () async -> Void
-    /// 分享卡入口（仅电影详情传值；剧集为 nil，不出现该按钮）。
+    /// 分享卡入口（电影 / 剧集详情传值；人物页不使用本骨架）。
     let receiptAction: (() -> Void)?
     @ViewBuilder let facts: (Detail) -> Facts
     @ViewBuilder let extraContent: (Detail) -> Extra

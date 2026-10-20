@@ -95,6 +95,7 @@ struct DecodingTests {
         #expect(detail.seasons?[0].displayName == "第 1 季")
         #expect(detail.seasons?[2].displayName == "特别篇")
         #expect(detail.lastAirDate == "2022-07-01")
+        #expect(detail.createdBy?.first?.name == "Duffer Brothers")
     }
 
     @Test("分集：缺简介 / 缺剧照 / 部分字段缺失均不崩溃")

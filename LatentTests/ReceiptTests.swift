@@ -69,6 +69,118 @@ struct ReceiptTests {
         #expect(data.tagline?.hasSuffix("…") == true)
     }
 
+    // MARK: - 剧集 / 人物映射
+
+    @Test("剧集映射：首播 / 季数 / 集数 / 类型 / 主创 / 主演，页脚标注剧集")
+    func mapsTVFields() {
+        let detail = TVShowDetail(
+            id: 1399,
+            name: "权力的游戏",
+            originalName: "Game of Thrones",
+            posterPath: "/got.jpg",
+            firstAirDate: "2011-04-17",
+            voteAverage: 8.4,
+            voteCount: 22_000,
+            genres: [Genre(id: 10765, name: "科幻"), Genre(id: 18, name: "剧情")],
+            tagline: "凛冬将至",
+            credits: Credits(
+                cast: [
+                    CastMember(id: 1, name: "艾米莉亚·克拉克"),
+                    CastMember(id: 2, name: "基特·哈灵顿"),
+                    CastMember(id: 3, name: "彼特·丁拉基"),
+                    CastMember(id: 4, name: "琳娜·海蒂"),
+                ],
+                crew: [
+                    CrewMember(id: 11, name: "米格尔·萨普什尼克", job: "Director", department: "Directing"),
+                ]
+            ),
+            numberOfSeasons: 8,
+            numberOfEpisodes: 73,
+            createdBy: [
+                Creator(id: 9, name: "大卫·贝尼奥夫"),
+                Creator(id: 10, name: "D·B·威斯"),
+            ]
+        )
+
+        let data = ReceiptData.build(from: detail)
+
+        #expect(data.subjectLabel == "剧集")
+        #expect(data.title == "权力的游戏")
+        #expect(data.originalTitle == "Game of Thrones")
+        #expect(data.rating == "8.4")
+        #expect(data.tagline == "凛冬将至")
+        #expect(data.fields.map(\.label) == ["首播", "季数", "集数", "类型", "主创", "主演"])
+        #expect(data.fields.first(where: { $0.label == "首播" })?.value == "2011 年 4 月 17 日")
+        #expect(data.fields.first(where: { $0.label == "季数" })?.value == "8 季")
+        #expect(data.fields.first(where: { $0.label == "集数" })?.value == "73 集")
+        #expect(data.fields.first(where: { $0.label == "主创" })?.value == "大卫·贝尼奥夫 / D·B·威斯")
+        #expect(data.fields.first(where: { $0.label == "主演" })?.value == "艾米莉亚·克拉克 / 基特·哈灵顿 / 彼特·丁拉基")
+    }
+
+    @Test("剧集缺字段省略：无日期 / 季数 / 集数时不出现对应行")
+    func omitsMissingTVFields() {
+        let data = ReceiptData.build(from: TVShowDetail(id: 1, name: "无数据"))
+
+        #expect(data.fields.isEmpty)
+        #expect(data.rating == nil)
+        #expect(data.voteCount == nil)
+        #expect(data.originalTitle == nil)
+        #expect(data.tagline == nil)
+        #expect(data.subjectLabel == "剧集")
+    }
+
+    @Test("人物映射：生卒 / 出生地 / 领域 / 代表作；代表作按人气取前三")
+    func mapsPersonFields() {
+        let person = PersonDetail(
+            id: 1,
+            name: "张曼玉",
+            biography: String(repeating: "影", count: 80),
+            birthday: "1964-09-20",
+            placeOfBirth: "香港",
+            knownForDepartment: "Acting",
+            profilePath: "/maggie.jpg",
+            combinedCredits: CombinedCredits(cast: [
+                MediaSummary(id: 1, mediaKind: .movie, title: "花样年华", popularity: 10),
+                MediaSummary(id: 2, mediaKind: .movie, title: "清洁", popularity: 5),
+                MediaSummary(id: 3, mediaKind: .movie, title: "英雄", popularity: 20),
+                MediaSummary(id: 4, mediaKind: .movie, title: "阿飞正传", popularity: 15),
+            ])
+        )
+
+        let data = ReceiptData.build(from: person)
+
+        #expect(data.subjectLabel == "人物")
+        #expect(data.title == "张曼玉")
+        #expect(data.originalTitle == nil)
+        #expect(data.posterPath == "/maggie.jpg")
+        #expect(data.rating == nil)
+        #expect(data.voteCount == nil)
+        #expect(data.fields.map(\.label) == ["生卒", "出生地", "领域", "代表作"])
+        #expect(data.fields.first(where: { $0.label == "生卒" })?.value == "1964 年生")
+        #expect(data.fields.first(where: { $0.label == "代表作" })?.value == "英雄 / 阿飞正传 / 花样年华")
+        // 人物无 tagline：页脚标语回退到简介前 60 字。
+        #expect(data.tagline?.count == 61)
+    }
+
+    @Test("人物生卒：有卒年时显示生卒年区间")
+    func mapsPersonLifeRange() {
+        let person = PersonDetail(id: 2, name: "某导演", birthday: "1920-01-01", deathday: "1990-12-31")
+        let data = ReceiptData.build(from: person)
+
+        #expect(data.fields.first(where: { $0.label == "生卒" })?.value == "1920 – 1990")
+    }
+
+    @Test("人物缺字段省略：无生卒 / 出生地 / 领域 / 作品时不出现字段行")
+    func omitsMissingPersonFields() {
+        let data = ReceiptData.build(from: PersonDetail(id: 3, name: "无资料"))
+
+        #expect(data.fields.isEmpty)
+        #expect(data.tagline == nil)
+        #expect(data.posterPath == nil)
+        #expect(data.rating == nil)
+        #expect(data.subjectLabel == "人物")
+    }
+
     // MARK: - 调色板
 
     @Test("七款固有调色板齐全：强调色互不相同")
@@ -314,6 +426,29 @@ struct ReceiptTests {
             #expect(image != nil, "\(style.displayName) 渲染失败")
             #expect(image?.width == 1080)
             #expect(image?.height == 1440)
+        }
+    }
+
+    @Test("剧集 / 人物卡同样导出 1080×1440")
+    func rendersTVAndPersonExportSize() {
+        let tv = ReceiptData.build(from: TVShowDetail(
+            id: 1, name: "测试剧集", firstAirDate: "2020-01-01",
+            voteAverage: 7.2, numberOfSeasons: 2, numberOfEpisodes: 16
+        ))
+        let person = ReceiptData.build(from: PersonDetail(
+            id: 2, name: "测试人物", birthday: "1970-01-01", placeOfBirth: "上海"
+        ))
+
+        for data in [tv, person] {
+            for style in [ReceiptStyle.thermal, .cupSticker] {
+                let image = ReceiptRenderer.cgImage(
+                    data: data, style: style, palette: style.basePalette,
+                    posterMode: style.posterMode, poster: nil
+                )
+                #expect(image != nil, "\(data.title) · \(style.displayName) 渲染失败")
+                #expect(image?.width == 1080)
+                #expect(image?.height == 1440)
+            }
         }
     }
 

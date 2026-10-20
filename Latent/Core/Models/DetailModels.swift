@@ -144,6 +144,8 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
     let episodeRunTime: [Int]?
     let lastAirDate: String?
     let networks: [Network]?
+    /// 主创（TMDB `created_by`；与分集导演是两回事）。
+    let createdBy: [Creator]?
 
     var mediaKind: MediaKind { .tv }
     var title: String { name }
@@ -165,6 +167,7 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
         case numberOfEpisodes = "number_of_episodes"
         case episodeRunTime = "episode_run_time"
         case lastAirDate = "last_air_date"
+        case createdBy = "created_by"
     }
 
     init(
@@ -177,7 +180,7 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
         recommendations: [MediaSummary]? = nil, numberOfSeasons: Int? = nil,
         numberOfEpisodes: Int? = nil, seasons: [Season]? = nil,
         episodeRunTime: [Int]? = nil, lastAirDate: String? = nil,
-        networks: [Network]? = nil
+        networks: [Network]? = nil, createdBy: [Creator]? = nil
     ) {
         self.id = id
         self.name = name
@@ -204,6 +207,7 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
         self.episodeRunTime = episodeRunTime
         self.lastAirDate = lastAirDate
         self.networks = networks
+        self.createdBy = createdBy
     }
 
     init(from decoder: any Decoder) throws {
@@ -237,6 +241,7 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
         self.episodeRunTime = (try? container.decodeIfPresent([Int].self, forKey: .episodeRunTime)) ?? nil
         self.lastAirDate = (try? container.decodeIfPresent(String.self, forKey: .lastAirDate)) ?? nil
         self.networks = (try? container.decodeIfPresent([Network].self, forKey: .networks)) ?? nil
+        self.createdBy = (try? container.decodeIfPresent([Creator].self, forKey: .createdBy)) ?? nil
     }
 
     /// 事实栏行（剧集：状态 / 首播 / 季数 / 集数 / 最近播出 / 语言）。
@@ -300,6 +305,31 @@ struct Season: Codable, Sendable, Identifiable, Hashable {
     var displayName: String {
         if let name, !name.isEmpty { return name }
         return seasonNumber == 0 ? "特别篇" : "第 \(seasonNumber) 季"
+    }
+}
+
+/// 剧集主创（`created_by`）。
+struct Creator: Decodable, Sendable, Identifiable, Hashable {
+    let id: Int
+    let name: String
+    let profilePath: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name
+        case profilePath = "profile_path"
+    }
+
+    init(id: Int, name: String, profilePath: String? = nil) {
+        self.id = id
+        self.name = name
+        self.profilePath = profilePath
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? container.decode(Int.self, forKey: .id)) ?? 0
+        self.name = ((try? container.decodeIfPresent(String.self, forKey: .name)) ?? nil) ?? "未知"
+        self.profilePath = (try? container.decodeIfPresent(String.self, forKey: .profilePath)) ?? nil
     }
 }
 

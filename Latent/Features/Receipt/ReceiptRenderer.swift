@@ -305,12 +305,20 @@ struct ReceiptCardView: View {
                     .lineLimit(2)
                     .foregroundStyle(palette.ink.color.opacity(0.75))
             }
-            Text("显影 · 本地元数据 · 非商业分享")
+            Text(footerBrand)
                 .font(.system(size: 9, weight: .medium))
                 .tracking(1.6)
                 .foregroundStyle(palette.ink.color.opacity(0.4))
         }
         .padding(.top, 8)
+    }
+
+    /// 页脚品牌行：电影保持 v1.2 文案；剧集 / 人物额外标注类型。
+    private var footerBrand: String {
+        if let subject = data.subjectLabel {
+            return "显影 · \(subject) · 非商业分享"
+        }
+        return "显影 · 本地元数据 · 非商业分享"
     }
 }
 

@@ -11,6 +11,7 @@ struct PersonDetailView: View {
     @State private var sortOrder = [KeyPathComparator(\FilmographyRow.year, order: .reverse)]
     @State private var filter: FilmFilter = .all
     @State private var isBiographyExpanded = false
+    @State private var showsReceipt = false
 
     enum FilmFilter: String, CaseIterable, Identifiable {
         case all, movie, tv
@@ -45,6 +46,23 @@ struct PersonDetailView: View {
         }
         .background(UI.Palette.bg)
         .task(id: personID) { await load() }
+        .toolbar {
+            if person != nil {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showsReceipt = true
+                    } label: {
+                        Label("分享卡", systemImage: "rectangle.portrait.on.rectangle.portrait.angled")
+                    }
+                    .help("生成分享卡（发朋友圈用）")
+                }
+            }
+        }
+        .sheet(isPresented: $showsReceipt) {
+            if let person {
+                ReceiptSheet(data: ReceiptData.build(from: person))
+            }
+        }
     }
 
     private var header: some View {

@@ -2,11 +2,11 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-/// 分享卡预览与导出（电影详情页工具栏唤起；设计文档第 8.10 节）。
+/// 分享卡预览与导出（电影 / 剧集 / 人物详情页工具栏唤起；设计文档第 8.10 节）。
 ///
 /// 预览与导出是同一张 `ReceiptCardView`：预览按 0.6 缩放，导出走 `ImageRenderer` 出 1080×1440 PNG。
 struct ReceiptSheet: View {
-    let movie: MovieDetail
+    let data: ReceiptData
 
     @Environment(\.dismiss) private var dismiss
     @State private var style: ReceiptStyle = .thermal
@@ -19,7 +19,6 @@ struct ReceiptSheet: View {
     @State private var exportDocument: ReceiptImageDocument?
     @State private var isExporting = false
 
-    private var data: ReceiptData { ReceiptData.build(from: movie) }
     private var palette: ReceiptPalette {
         followsPoster
             ? ReceiptPalette.posterDriven(base: style.basePalette, colors: posterColors)
@@ -66,10 +65,10 @@ struct ReceiptSheet: View {
 
     private var header: some View {
         HStack(spacing: UI.Spacing.s3) {
-            Text("分享卡")
+            Text(data.subjectLabel.map { "分享卡 · \($0)" } ?? "分享卡")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(UI.Palette.textPrimary)
-            Text(movie.title)
+            Text(data.title)
                 .font(.system(size: 12))
                 .lineLimit(1)
                 .foregroundStyle(UI.Palette.textSecondary)
