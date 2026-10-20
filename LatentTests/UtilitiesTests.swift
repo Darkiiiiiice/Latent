@@ -348,3 +348,38 @@ struct AppSettingsTests {
         #expect(reloaded.proxy.mode == .system) // 不再被环境变量覆盖
     }
 }
+
+/// 「来一部」随机挑选。
+@Suite("随机来一部")
+struct RandomPickTests {
+
+    private func item(_ id: Int, kind: MediaKind = .movie, title: String = "测试") -> MediaSummary {
+        MediaSummary(id: id, mediaKind: kind, title: title)
+    }
+
+    @Test("空列表返回 nil")
+    func emptyReturnsNil() {
+        #expect([MediaSummary]().randomPick(excluding: nil) == nil)
+    }
+
+    @Test("只有一条时返回自身（即使它是上一部）")
+    func singleReturnsSelf() {
+        let only = item(1)
+        #expect([only].randomPick(excluding: only) == only)
+    }
+
+    @Test("多条时避开上一部")
+    func avoidsPrevious() {
+        let first = item(1)
+        let second = item(2)
+        #expect([first, second].randomPick(excluding: first) == second)
+        #expect([first, second].randomPick(excluding: second) == first)
+    }
+
+    @Test("同 id 不同类型不算同一部")
+    func kindMatters() {
+        let movie = item(603, kind: .movie)
+        let show = item(603, kind: .tv)
+        #expect([movie, show].randomPick(excluding: movie) == show)
+    }
+}

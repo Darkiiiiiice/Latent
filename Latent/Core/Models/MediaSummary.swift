@@ -120,6 +120,16 @@ struct MediaSummary: Decodable, Sendable, Identifiable, Hashable {
     }
 }
 
+extension Collection where Element == MediaSummary {
+    /// 「来一部」：随机挑一部；列表多于一条时避开上一部，避免连点两次开同一部。
+    func randomPick(excluding previous: MediaSummary?) -> MediaSummary? {
+        guard !isEmpty else { return nil }
+        guard count > 1, let previous else { return randomElement() }
+        let others = filter { !($0.id == previous.id && $0.mediaKind == previous.mediaKind) }
+        return others.randomElement() ?? randomElement()
+    }
+}
+
 /// 人物精简信息（多类型搜索的分组结果用）。
 struct PersonSummary: Codable, Sendable, Identifiable, Hashable {
     let id: Int

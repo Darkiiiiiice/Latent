@@ -1,6 +1,7 @@
 import Testing
 import SwiftUI
 import CoreGraphics
+import UniformTypeIdentifiers
 @testable import Latent
 
 /// 分享卡（设计文档第 8.10 节）测试。
@@ -450,6 +451,17 @@ struct ReceiptTests {
                 #expect(image?.height == 1440)
             }
         }
+    }
+
+    @Test("系统分享的图片按 PNG 导出")
+    func shareImageExportsPNG() throws {
+        let data = ReceiptData.build(from: MovieDetail(id: 1, title: "测试影片"))
+        let image = try #require(ReceiptRenderer.cgImage(
+            data: data, style: .thermal, palette: ReceiptStyle.thermal.basePalette,
+            posterMode: .duotone, poster: nil
+        ))
+        let shareImage = Image(nsImage: NSImage(cgImage: image, size: ReceiptCanvas.size))
+        #expect(shareImage.exportedContentTypes().contains(.png))
     }
 
     @Test("导出 PNG：非空且带 PNG 签名")

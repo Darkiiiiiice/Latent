@@ -18,6 +18,8 @@ struct ReceiptSheet: View {
     @State private var posterColors: ReceiptPosterColors?
     @State private var exportDocument: ReceiptImageDocument?
     @State private var isExporting = false
+    /// 系统分享用的位图（`ShareLink` 需要一个现成的 `Transferable`）。
+    @State private var shareImage: Image?
 
     private var palette: ReceiptPalette {
         followsPoster
@@ -26,6 +28,11 @@ struct ReceiptSheet: View {
     }
     private var posterMode: ReceiptPosterMode {
         keepsPosterColors ? .original : style.posterMode
+    }
+
+    /// 重新生成系统分享图的触发键：风格 / 两个开关 / 海报是否就位。
+    private var shareKey: String {
+        "\(style.rawValue)|\(keepsPosterColors)|\(followsPoster)|\(poster != nil)"
     }
 
     private let previewScale: CGFloat = 0.6
@@ -45,6 +52,7 @@ struct ReceiptSheet: View {
         .frame(width: 760)
         .background(UI.Palette.bg)
         .task { await loadPoster() }
+        .task(id: shareKey) { updateShareImage() }
         .fileExporter(
             isPresented: $isExporting,
             document: exportDocument,
@@ -185,12 +193,37 @@ struct ReceiptSheet: View {
         HStack(spacing: UI.Spacing.s3) {
             Button("复制到剪贴板") { copyToPasteboard() }
                 .buttonStyle(.borderedProminent)
+            if let shareImage {
+                ShareLink(
+                    item: shareImage,
+                    preview: SharePreview("显影分享卡", image: shareImage)
+                ) {
+                    Label("分享…", systemImage: "square.and.arrow.up")
+                }
+                .buttonStyle(.bordered)
+                .help("用系统分享菜单发送 PNG（微信 / 备忘录 / AirDrop）")
+            } else {
+                Button("分享…") {}
+                    .buttonStyle(.bordered)
+                    .disabled(true)
+            }
             Button("保存 PNG…") { save() }
             Spacer(minLength: 0)
             Button("完成") { dismiss() }
         }
         .padding(.horizontal, UI.Spacing.s6)
         .padding(.vertical, UI.Spacing.s4)
+    }
+
+    /// 生成 `ShareLink` 用的位图（与导出同一张卡、同一尺寸）。
+    private func updateShareImage() {
+        guard let image = ReceiptRenderer.cgImage(
+            data: data, style: style, palette: palette, posterMode: posterMode, poster: poster
+        ) else {
+            shareImage = nil
+            return
+        }
+        shareImage = Image(nsImage: NSImage(cgImage: image, size: ReceiptCanvas.size))
     }
 
     private func copyToPasteboard() {

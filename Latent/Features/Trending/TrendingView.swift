@@ -65,6 +65,8 @@ struct TrendingView: View {
             .frame(width: 140)
 
             Spacer(minLength: 0)
+
+            SurpriseMeButton(items: feed?.items ?? [], open: open)
         }
     }
 
@@ -98,9 +100,15 @@ struct DiscoverView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: UI.Spacing.s4) {
-                Text("发现")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(UI.Palette.textPrimary)
+                HStack(spacing: UI.Spacing.s3) {
+                    Text("发现")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(UI.Palette.textPrimary)
+
+                    Spacer(minLength: 0)
+
+                    SurpriseMeButton(items: feed?.items ?? [], open: open)
+                }
 
                 filterBar
 
@@ -283,5 +291,30 @@ struct DiscoverView: View {
     private func loadGenres() async {
         guard genres.isEmpty else { return }
         genres = (try? await appEnv.client.genreList(mediaKind: mediaKind)) ?? []
+    }
+}
+
+/// 「来一部」：从当前已加载、已筛选的结果里随机打开一部。
+///
+/// 只从内存里的列表挑，不额外发请求；因此「按当前筛选条件随机」天然成立。
+/// 列表加载完成前禁用。
+struct SurpriseMeButton: View {
+    let items: [MediaSummary]
+    let open: (MediaSummary) -> Void
+
+    @State private var lastPick: MediaSummary?
+
+    var body: some View {
+        Button {
+            guard let pick = items.randomPick(excluding: lastPick) else { return }
+            lastPick = pick
+            open(pick)
+        } label: {
+            Label("来一部", systemImage: "dice")
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .disabled(items.isEmpty)
+        .help("从当前列表随机打开一部")
     }
 }
