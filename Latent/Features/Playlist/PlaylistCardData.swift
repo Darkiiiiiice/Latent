@@ -46,6 +46,14 @@ struct PlaylistCardData: Sendable, Equatable {
         self.items = Array(items.prefix(Self.maximumItems))
     }
 
+    /// 打开面板时的默认预选：列表当前排序的前 12 部。
+    ///
+    /// 单独抽出来是为了让「快照可能为空 / 变化」这条路径可测：空列表得到空集合，
+    /// 面板据此显示空状态而不是「已全选」。
+    static func initialSelection(from items: [LibrarySnapshot]) -> Set<String> {
+        Set(items.prefix(maximumItems).map(\.id))
+    }
+
     /// 从「已选中的库条目」构建；顺序即卡片顺序（沿用列表当前排序）。
     static func build(title: String, kind: LibraryKind, items: [LibrarySnapshot]) -> PlaylistCardData {
         let mapped = items.prefix(Self.maximumItems).map(PlaylistCardItem.init(snapshot:))

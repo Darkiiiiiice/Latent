@@ -1,5 +1,15 @@
 import SwiftUI
 
+/// 片单卡 sheet 的携带数据：点按「片单卡」时把 `kind` 与当前排序的列表快照一起传入。
+///
+/// 每次点按都是新 `id`，`PlaylistSheet` 因此拿到全新状态，不会沿用上一次弹窗的
+/// 勾选，也不会在列表尚未就绪时读到空数组。
+private struct PlaylistPresentation: Identifiable {
+    let id = UUID()
+    let kind: LibraryKind
+    let items: [LibrarySnapshot]
+}
+
 /// 收藏 / 观看清单页（设计文档第 8.6 节）：同款网格；排序（添加时间 / 评分 / 年份）。
 struct LibraryView: View {
     let kind: LibraryKind
@@ -8,8 +18,7 @@ struct LibraryView: View {
 
     @Environment(AppEnvironment.self) private var appEnv
     @State private var sort: SortOption = .addedAt
-    @State private var showsPlaylistSheet = false
-    @State private var playlistItems: [LibrarySnapshot] = []
+    @State private var playlistPresentation: PlaylistPresentation?
 
     private var items: [LibrarySnapshot] {
         appEnv.library.items(kind: kind, sortedBy: sort)
@@ -31,8 +40,10 @@ struct LibraryView: View {
 
                     if !items.isEmpty {
                         Button {
-                            playlistItems = items
-                            showsPlaylistSheet = true
+                            // 把点按瞬间的列表快照随 sheet 一起带上：用 `item` 而非
+                            // `isPresented` + 另一个 @State，避免首次弹出读到空 / 旧数组
+                            // （v1.6.1 修复：片单卡弹窗显示「0 部」）。
+                            playlistPresentation = PlaylistPresentation(kind: kind, items: items)
                         } label: {
                             Label("片单卡", systemImage: "square.grid.3x3.fill")
                         }
@@ -67,8 +78,8 @@ struct LibraryView: View {
             .padding(.vertical, UI.Spacing.s6)
         }
         .background(UI.Palette.bg)
-        .sheet(isPresented: $showsPlaylistSheet) {
-            PlaylistSheet(kind: kind, items: playlistItems)
+        .sheet(item: $playlistPresentation) { presentation in
+            PlaylistSheet(kind: presentation.kind, items: presentation.items)
         }
         .onReceive(NotificationCenter.default.publisher(for: AppCommandBus.refresh)) { _ in
             // 库数据来自本地，刷新即重读（视图已有 @Observable 联动，这里仅作界面反馈）

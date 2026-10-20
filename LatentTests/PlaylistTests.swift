@@ -54,6 +54,32 @@ struct PlaylistTests {
         #expect(data.items.count == 3)
     }
 
+    // MARK: - 默认预选（v1.6.1「0 部」回归）
+
+    @Test("快照为空时预选为空，不再误报「已全选」")
+    func emptySnapshotHasNoSelection() {
+        let selection = PlaylistCardData.initialSelection(from: [])
+        #expect(selection.isEmpty)
+
+        let data = PlaylistCardData.build(title: "我的收藏", kind: .favorites, items: [])
+        #expect(data.items.isEmpty)
+        #expect(data.subtitle == "收藏 · 0 部")
+    }
+
+    @Test("快照变化时按新列表重新预选前 12 部")
+    func selectionFollowsSnapshot() {
+        let fourteen = Self.snapshots(14)
+        let all = PlaylistCardData.initialSelection(from: fourteen)
+        #expect(all.count == 12)
+        #expect(all.contains(fourteen[0].id))
+        #expect(all.contains(fourteen[11].id))
+        #expect(!all.contains(fourteen[12].id))
+
+        // 从空的旧快照切到非空快照：预选必须补齐，而不是停留在空集合。
+        let recovered = PlaylistCardData.initialSelection(from: Self.snapshots(3))
+        #expect(recovered.count == 3)
+    }
+
     // MARK: - 网格
 
     @Test("网格按数量切 2 / 3 / 4 列，最后一排下标正确")

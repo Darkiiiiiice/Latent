@@ -38,9 +38,7 @@ struct PlaylistSheet: View {
         self.kind = kind
         self.items = items
         _title = State(initialValue: kind == .favorites ? "我的收藏" : "我的观看清单")
-        _selectedIDs = State(
-            initialValue: Set(items.prefix(PlaylistCardData.maximumItems).map(\.id))
-        )
+        _selectedIDs = State(initialValue: PlaylistCardData.initialSelection(from: items))
     }
 
     // MARK: - 派生状态
@@ -95,6 +93,11 @@ struct PlaylistSheet: View {
         }
         .frame(width: 900)
         .background(UI.Palette.bg)
+        // 勾选随快照校准：即使 SwiftUI 复用了上一次弹窗的 @State（v1.6.1 修复的
+        // 「0 部」问题），首次出现 / 快照变化时也会按当前列表重新预选前 12 部。
+        .onChange(of: items, initial: true) { _, newItems in
+            selectedIDs = PlaylistCardData.initialSelection(from: newItems)
+        }
         .task(id: selectedKey) { await loadPosters(for: selectedItems) }
         .task(id: previewRenderKey) { rebuildProcessedPosters() }
         .task(id: shareKey) { await updateShareImage() }
@@ -226,12 +229,26 @@ struct PlaylistSheet: View {
                     )
             }
 
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(items) { item in
-                        selectionRow(item)
-                        if item.id != items.last?.id {
-                            Divider().overlay(UI.Palette.border)
+            Group {
+                if items.isEmpty {
+                    VStack(spacing: UI.Spacing.s2) {
+                        Image(systemName: "rectangle.stack.badge.plus")
+                            .font(.system(size: 20))
+                            .foregroundStyle(UI.Palette.textSecondary.opacity(0.6))
+                        Text("\(kind.title)里还没有作品，先去收藏几部再回来做片单卡。")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(UI.Palette.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(items) { item in
+                                selectionRow(item)
+                                if item.id != items.last?.id {
+                                    Divider().overlay(UI.Palette.border)
+                                }
+                            }
                         }
                     }
                 }
@@ -250,6 +267,9 @@ struct PlaylistSheet: View {
     }
 
     private var selectionHint: String {
+        if items.isEmpty {
+            return "片单卡至少需要 1 部作品。"
+        }
         if selectedIDs.count >= PlaylistCardData.maximumItems {
             return "已达 12 部上限；先取消一部再换。卡片顺序跟随列表当前排序。"
         }
