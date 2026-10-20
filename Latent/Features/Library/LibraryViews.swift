@@ -19,6 +19,7 @@ struct LibraryView: View {
 
     @Environment(AppEnvironment.self) private var appEnv
     @State private var sort: SortOption = .addedAt
+    @State private var filter = ""
     @State private var playlistPresentation: PlaylistPresentation?
     @State private var isSelecting = false
     @State private var selectedIDs: Set<String> = []
@@ -26,8 +27,21 @@ struct LibraryView: View {
     @State private var dismissedChangeID: UUID?
     @State private var undoKeyMonitor: Any?
 
-    private var items: [LibrarySnapshot] {
+    private var allItems: [LibrarySnapshot] {
         appEnv.library.items(kind: kind, sortedBy: sort)
+    }
+
+    /// 当前筛选结果（v1.8）：排序后按标题 / 原始标题匹配拼音、首字母或中英文直搜。
+    private var items: [LibrarySnapshot] {
+        let query = trimmedFilter
+        guard !query.isEmpty else { return allItems }
+        return allItems.filter {
+            PinyinSearch.matches(query: query, title: $0.title, originalTitle: $0.originalTitle)
+        }
+    }
+
+    private var trimmedFilter: String {
+        filter.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var orderedIDs: [String] { items.map(\.id) }
@@ -40,11 +54,20 @@ struct LibraryView: View {
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(UI.Palette.textPrimary)
 
-                    if !items.isEmpty {
-                        NumericText(text: "\(items.count)", size: 11)
+                    if !allItems.isEmpty {
+                        NumericText(
+                            text: trimmedFilter.isEmpty
+                                ? "\(allItems.count)"
+                                : "\(items.count) / \(allItems.count)",
+                            size: 11
+                        )
                     }
 
                     Spacer(minLength: 0)
+
+                    if !allItems.isEmpty {
+                        filterField
+                    }
 
                     if !items.isEmpty && !isSelecting {
                         Button {
@@ -57,7 +80,7 @@ struct LibraryView: View {
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
-                        .help("把当前列表做成一张 3:4 片单分享卡")
+                        .help("把当前列表（含筛选）做成一张 3:4 片单分享卡")
 
                         ExportMenu(scope: kind == .favorites ? .favorites : .watchlist)
 
@@ -86,12 +109,19 @@ struct LibraryView: View {
                     undoBar(change)
                 }
 
-                if items.isEmpty {
+                if allItems.isEmpty {
                     EmptyState(
                         message: kind == .favorites ? "还没有收藏" : "观看清单是空的",
                         systemImage: kind == .favorites ? "star" : "bookmark",
                         actionTitle: "去趋势页逛逛",
                         action: { AppCommandBus.select(.trending) }
+                    )
+                } else if items.isEmpty {
+                    EmptyState(
+                        message: "没有找到「\(trimmedFilter)」",
+                        systemImage: "magnifyingglass",
+                        actionTitle: "清除筛选",
+                        action: { filter = "" }
                     )
                 } else {
                     MediaGrid(
@@ -123,6 +153,7 @@ struct LibraryView: View {
             }
         }
         .onChange(of: kind) { _, _ in
+            filter = ""
             endSelection()
         }
         .onAppear {
@@ -135,6 +166,42 @@ struct LibraryView: View {
             // 库数据来自本地，刷新即重读（视图已有 @Observable 联动，这里仅作界面反馈）
             ToastCenter.shared.show("已刷新")
         }
+    }
+
+    // MARK: - 筛选（v1.8）
+
+    private var filterField: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11))
+                .foregroundStyle(UI.Palette.textSecondary)
+
+            TextField("拼音 / 首字母筛选", text: $filter)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12))
+                .accessibilityLabel("筛选片库")
+
+            if !filter.isEmpty {
+                Button {
+                    filter = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(UI.Palette.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .help("清除筛选")
+                .accessibilityLabel("清除筛选")
+            }
+        }
+        .padding(.horizontal, UI.Spacing.s2)
+        .frame(width: 180, height: 24)
+        .background(
+            UI.Palette.surfaceElevated,
+            in: RoundedRectangle(cornerRadius: UI.Radius.input, style: .continuous)
+        )
+        .hairlineBorder(UI.Palette.border, radius: UI.Radius.input)
+        .help("支持中文、英文、拼音全拼与首字母")
     }
 
     // MARK: - 多选（v1.7）

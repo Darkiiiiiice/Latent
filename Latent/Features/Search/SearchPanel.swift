@@ -35,7 +35,27 @@ struct SearchPanel: View {
         results.compactMap { if case .person(let item) = $0 { return item } else { return nil } }
     }
 
+    /// 本地片库匹配（v1.8）：只在拉丁字母查询时显示，避免中文查询与 TMDB 结果重复。
+    private var localMatches: [LibrarySnapshot] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, PinyinSearch.isLatinQuery(trimmed) else { return [] }
+
+        let favorites = appEnv.library.items(kind: .favorites, sortedBy: .addedAt)
+        let watchlist = appEnv.library.items(kind: .watchlist, sortedBy: .addedAt)
+
+        var seen: Set<String> = []
+        var matches: [LibrarySnapshot] = []
+        for item in favorites + watchlist {
+            guard seen.insert(item.id).inserted else { continue }
+            if PinyinSearch.matches(query: trimmed, title: item.title, originalTitle: item.originalTitle) {
+                matches.append(item)
+            }
+        }
+        return matches
+    }
+
     var body: some View {
+        let local = localMatches
         VStack(alignment: .leading, spacing: 0) {
             searchField
             Divider().overlay(UI.Palette.border)
@@ -44,31 +64,40 @@ struct SearchPanel: View {
                 VStack(alignment: .leading, spacing: UI.Spacing.s4) {
                     if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         recentSearches
-                    } else if let feed {
-                        if case .error(let message) = feed.state, feed.items.isEmpty {
-                            ErrorBanner(message: message) { Task { await feed.retry() } }
-                        } else if feed.items.isEmpty {
-                            if feed.state.isInitialLoading {
-                                ProgressView()
-                                    .controlSize(.small)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(UI.Spacing.s6)
-                            } else {
-                                EmptyState(message: "没有找到「\(query)」", actionTitle: "清空搜索") {
-                                    query = ""
+                    } else {
+                        localGroup(local)
+
+                        if let feed {
+                            if case .error(let message) = feed.state, feed.items.isEmpty {
+                                ErrorBanner(message: message) { Task { await feed.retry() } }
+                            } else if feed.items.isEmpty {
+                                if feed.state.isInitialLoading {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(UI.Spacing.s6)
+                                } else if local.isEmpty {
+                                    EmptyState(message: "没有找到「\(query)」", actionTitle: "清空搜索") {
+                                        query = ""
+                                    }
+                                } else {
+                                    Text("TMDB 中没有更多结果")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(UI.Palette.textSecondary)
+                                        .padding(.vertical, UI.Spacing.s2)
                                 }
+                            } else {
+                                group(title: "电影", items: movies)
+                                group(title: "剧集", items: shows)
+                                personGroup
+                                paginationFooter(feed)
                             }
                         } else {
-                            group(title: "电影", items: movies)
-                            group(title: "剧集", items: shows)
-                            personGroup
-                            paginationFooter(feed)
+                            ProgressView()
+                                .controlSize(.small)
+                                .frame(maxWidth: .infinity)
+                                .padding(UI.Spacing.s6)
                         }
-                    } else {
-                        ProgressView()
-                            .controlSize(.small)
-                            .frame(maxWidth: .infinity)
-                            .padding(UI.Spacing.s6)
                     }
                 }
                 .padding(UI.Spacing.s3)
@@ -129,7 +158,7 @@ struct SearchPanel: View {
     @ViewBuilder
     private var recentSearches: some View {
         if settings.recentSearches.isEmpty {
-            Text("输入关键词开始搜索；支持中文与英文标题。")
+            Text("输入关键词开始搜索；支持中文、英文标题与片库拼音 / 首字母。")
                 .font(.system(size: 12))
                 .foregroundStyle(UI.Palette.textSecondary)
                 .padding(.vertical, UI.Spacing.s3)
@@ -166,6 +195,39 @@ struct SearchPanel: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    /// 片库组：最多 6 部，紧凑行；不依赖 TMDB 请求，断网也可打开。
+    @ViewBuilder
+    private func localGroup(_ matches: [LibrarySnapshot]) -> some View {
+        if !matches.isEmpty {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: UI.Spacing.s2) {
+                    Text("片库")
+                        .font(.system(size: 11, weight: .medium))
+                        .kerning(0.4)
+                        .foregroundStyle(UI.Palette.textSecondary)
+                    Text("\(matches.count) 部")
+                        .font(.system(size: 10))
+                        .foregroundStyle(UI.Palette.textSecondary)
+                    Spacer(minLength: 0)
+                }
+
+                ForEach(Array(matches.prefix(6))) { item in
+                    LocalLibraryRow(item: item) {
+                        open(item.asSummary)
+                    }
+                }
+
+                if matches.count > 6 {
+                    Text("还有 \(matches.count - 6) 部，可在收藏 / 观看清单中筛选")
+                        .font(.system(size: 10))
+                        .foregroundStyle(UI.Palette.textSecondary)
+                        .padding(.leading, UI.Spacing.s2)
+                        .padding(.top, 2)
                 }
             }
         }
@@ -317,5 +379,57 @@ struct SearchPanel: View {
         settings.recordSearch(query)
         isPresented = false
         NotificationCenter.default.post(name: AppCommandBus.pushDetail, object: DetailDestination.person(id: person.id))
+    }
+}
+
+/// 全局搜索里的片库紧凑行（v1.8）。
+private struct LocalLibraryRow: View {
+    let item: LibrarySnapshot
+    let onOpen: () -> Void
+
+    @State private var isHovering = false
+
+    private var subtitle: String {
+        var parts = [item.mediaKind.label]
+        if let year = item.year { parts.append("\(year)") }
+        return parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        Button(action: onOpen) {
+            HStack(spacing: UI.Spacing.s3) {
+                PosterImage(path: item.posterPath, displayWidth: 32, cornerRadius: 4)
+                    .frame(width: 32, height: 48)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.title)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(UI.Palette.textPrimary)
+                        .lineLimit(1)
+                    Text(subtitle)
+                        .font(.system(size: 11))
+                        .foregroundStyle(UI.Palette.textSecondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "arrow.up.forward")
+                    .font(.system(size: 10))
+                    .foregroundStyle(UI.Palette.textSecondary)
+            }
+            .padding(.horizontal, UI.Spacing.s2)
+            .padding(.vertical, 5)
+            .background(
+                isHovering ? UI.Palette.surfaceElevated : .clear,
+                in: RoundedRectangle(cornerRadius: UI.Radius.button, style: .continuous)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(UI.Motion.hover) { isHovering = hovering }
+        }
+        .accessibilityLabel(item.year.map { "\(item.title)，\($0) 年" } ?? item.title)
     }
 }
