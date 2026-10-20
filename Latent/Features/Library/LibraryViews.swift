@@ -8,6 +8,8 @@ struct LibraryView: View {
 
     @Environment(AppEnvironment.self) private var appEnv
     @State private var sort: SortOption = .addedAt
+    @State private var showsPlaylistSheet = false
+    @State private var playlistItems: [LibrarySnapshot] = []
 
     private var items: [LibrarySnapshot] {
         appEnv.library.items(kind: kind, sortedBy: sort)
@@ -28,6 +30,16 @@ struct LibraryView: View {
                     Spacer(minLength: 0)
 
                     if !items.isEmpty {
+                        Button {
+                            playlistItems = items
+                            showsPlaylistSheet = true
+                        } label: {
+                            Label("片单卡", systemImage: "square.grid.3x3.fill")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .help("把当前列表做成一张 3:4 片单分享卡")
+
                         ExportMenu(scope: kind == .favorites ? .favorites : .watchlist)
 
                         Picker("排序", selection: $sort) {
@@ -55,6 +67,9 @@ struct LibraryView: View {
             .padding(.vertical, UI.Spacing.s6)
         }
         .background(UI.Palette.bg)
+        .sheet(isPresented: $showsPlaylistSheet) {
+            PlaylistSheet(kind: kind, items: playlistItems)
+        }
         .onReceive(NotificationCenter.default.publisher(for: AppCommandBus.refresh)) { _ in
             // 库数据来自本地，刷新即重读（视图已有 @Observable 联动，这里仅作界面反馈）
             ToastCenter.shared.show("已刷新")
