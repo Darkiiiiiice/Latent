@@ -140,4 +140,84 @@ struct LibraryStoreTests {
         #expect(summary.mediaKind == .movie)
         #expect(summary.year == 2024)
     }
+
+    // MARK: - 批量操作（v1.7）
+
+    private var interstellar: MediaSummary {
+        MediaSummary(id: 157336, mediaKind: .movie, title: "星际穿越",
+                     dateString: "2014-11-05", voteAverage: 8.4)
+    }
+
+    @Test("批量移出：撤销后按原添加时间恢复")
+    func batchRemoveAndUndo() throws {
+        let (library, _, _) = makeStores()
+        library.toggleFavorite(dune)
+        library.toggleFavorite(interstellar)
+
+        let original = try #require(library.favoriteItems.first { $0.tmdbID == dune.id })
+        let change = try #require(
+            library.removeItems(ids: [original.id], from: .favorites)
+        )
+
+        #expect(library.favoriteCount == 1)
+        #expect(change.snapshots.count == 1)
+        #expect(library.lastBatchChange?.id == change.id)
+
+        library.undo(change)
+
+        let restored = try #require(library.favoriteItems.first { $0.tmdbID == dune.id })
+        #expect(library.favoriteCount == 2)
+        #expect(restored.addedAt == original.addedAt)
+        #expect(library.lastBatchChange == nil)
+    }
+
+    @Test("批量移动：撤销只移除本次新增，原本已在目标清单的保留")
+    func batchMoveAndUndo() throws {
+        let (library, _, _) = makeStores()
+        library.toggleFavorite(dune)
+        library.toggleFavorite(interstellar)
+        library.toggleWatchlist(dune) // 同时已在观看清单
+
+        let ids = Set(library.favoriteItems.map(\.id))
+        let change = try #require(
+            library.moveItems(ids: ids, from: .favorites, to: .watchlist)
+        )
+
+        #expect(library.favoriteCount == 0)
+        #expect(library.watchlistCount == 2)
+        #expect(change.destinationIDsAdded.count == 1)
+        #expect(change.destinationIDsAdded.contains(interstellar.stableID))
+        #expect(change.destinationIDsAdded.contains(dune.stableID) == false)
+
+        library.undo(change)
+
+        #expect(library.favoriteCount == 2)
+        #expect(library.watchlistCount == 1)
+        #expect(library.isInWatchlist(dune))
+        #expect(library.isFavorite(dune))
+        #expect(library.isFavorite(interstellar))
+    }
+
+    @Test("批量操作：空选择或没有匹配条目返回 nil")
+    func batchNoMatch() {
+        let (library, _, _) = makeStores()
+        #expect(library.removeItems(ids: [], from: .favorites) == nil)
+        #expect(library.removeItems(ids: ["movie-404"], from: .favorites) == nil)
+        #expect(library.moveItems(ids: ["movie-404"], from: .favorites, to: .watchlist) == nil)
+        #expect(library.lastBatchChange == nil)
+    }
+
+    @Test("刷新展示字段不改变添加时间")
+    func refreshKeepsAddedAt() throws {
+        let (library, _, _) = makeStores()
+        library.toggleFavorite(dune)
+        let original = try #require(library.favoriteItems.first)
+        let updated = MediaSummary(id: dune.id, mediaKind: .movie, title: "沙丘：第二部（新）",
+                                   dateString: "2024-02-27", voteAverage: 8.3)
+
+        library.refresh(updated)
+
+        #expect(library.favoriteItems.first?.title == "沙丘：第二部（新）")
+        #expect(library.favoriteItems.first?.addedAt == original.addedAt)
+    }
 }

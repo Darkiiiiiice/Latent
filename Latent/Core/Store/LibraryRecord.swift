@@ -7,7 +7,7 @@ import OSLog
 /// 按具体模型类型分派（`#Predicate` 需要访问具体类型的属性，协议属性不可用）。
 enum LibraryStoreWriter {
     @discardableResult
-    static func upsertFavorite(_ summary: MediaSummary, into context: ModelContext, now: Date = Date()) -> FavoriteItem {
+    static func upsertFavorite(_ summary: MediaSummary, into context: ModelContext, addedAt: Date = Date()) -> FavoriteItem {
         let kind = summary.mediaKind.rawValue
         let id = summary.id
         let descriptor = FetchDescriptor<FavoriteItem>(
@@ -24,16 +24,16 @@ enum LibraryStoreWriter {
             first.year = summary.year
             first.posterPath = summary.posterPath
             first.voteAverage = summary.voteAverage
-            first.addedAt = now
+            first.addedAt = addedAt
             return first
         }
-        let item = FavoriteItem(summary: summary, addedAt: now)
+        let item = FavoriteItem(summary: summary, addedAt: addedAt)
         context.insert(item)
         return item
     }
 
     @discardableResult
-    static func upsertWatchlist(_ summary: MediaSummary, into context: ModelContext, now: Date = Date()) -> WatchlistItem {
+    static func upsertWatchlist(_ summary: MediaSummary, into context: ModelContext, addedAt: Date = Date()) -> WatchlistItem {
         let kind = summary.mediaKind.rawValue
         let id = summary.id
         let descriptor = FetchDescriptor<WatchlistItem>(
@@ -50,10 +50,10 @@ enum LibraryStoreWriter {
             first.year = summary.year
             first.posterPath = summary.posterPath
             first.voteAverage = summary.voteAverage
-            first.addedAt = now
+            first.addedAt = addedAt
             return first
         }
-        let item = WatchlistItem(summary: summary, addedAt: now)
+        let item = WatchlistItem(summary: summary, addedAt: addedAt)
         context.insert(item)
         return item
     }

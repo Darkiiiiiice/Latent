@@ -6,6 +6,7 @@ import SwiftUI
 /// hover：上移 2pt + 淡阴影 + 右上角按钮淡入；选中：1px accent 描边 + 10% 外发光。
 struct PosterCard<ContextMenu: View>: View {
     let summary: MediaSummary
+    var isSelecting: Bool = false
     var isSelected: Bool = false
     var showsHoverAction: Bool = true
     let onOpen: () -> Void
@@ -32,7 +33,15 @@ struct PosterCard<ContextMenu: View>: View {
         .contextMenu { contextMenu() }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(isSelecting ? "点按以选择或取消选择" : "点按打开详情")
+        .accessibilityAddTraits(accessibilityTraits)
+        .accessibilityAction { onOpen() }
+    }
+
+    private var accessibilityTraits: AccessibilityTraits {
+        var traits: AccessibilityTraits = .isButton
+        if isSelecting && isSelected { traits.formUnion(.isSelected) }
+        return traits
     }
 
     private var poster: some View {
@@ -52,14 +61,38 @@ struct PosterCard<ContextMenu: View>: View {
                             .fill(UI.Palette.accent.opacity(0.10))
                     }
                 }
+                .overlay(alignment: .topLeading) {
+                    if isSelecting {
+                        selectionBadge
+                            .padding(UI.Spacing.s2)
+                    }
+                }
 
-            if showsHoverAction, let onToggleFavorite {
+            if showsHoverAction, !isSelecting, let onToggleFavorite {
                 favoriteButton(action: onToggleFavorite)
                     .padding(UI.Spacing.s2)
                     .opacity(isHovering || isFavorite ? 1 : 0)
             }
         }
         .frame(width: UI.Sizes.posterCard.width, height: UI.Sizes.posterCard.height)
+    }
+
+    /// 多选模式的圆形勾选标记（左上角）。
+    private var selectionBadge: some View {
+        ZStack {
+            Circle()
+                .fill(isSelected ? UI.Palette.accent : Color.black.opacity(0.42))
+            Circle()
+                .strokeBorder(.white.opacity(0.9), lineWidth: 1)
+            if isSelected {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+        }
+        .frame(width: 22, height: 22)
+        .shadow(color: .black.opacity(0.30), radius: 4, x: 0, y: 2)
+        .accessibilityHidden(true)
     }
 
     private func favoriteButton(action: @escaping () -> Void) -> some View {

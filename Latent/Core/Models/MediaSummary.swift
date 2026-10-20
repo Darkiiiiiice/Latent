@@ -21,6 +21,10 @@ struct MediaSummary: Decodable, Sendable, Identifiable, Hashable {
 
     var year: Int? { Formatters.year(from: dateString) }
 
+    /// 跨电影 / 剧集唯一的稳定键；与 `LibrarySnapshot.id` 同构。
+    /// 用于网格身份与多选，避免同 TMDB ID 的电影 / 剧集串选。
+    var stableID: String { "\(mediaKind.rawValue)-\(id)" }
+
     /// 供库条目（收藏 / 清单 / 历史）写入的初始快照。
     var hasPoster: Bool { posterPath?.isEmpty == false }
 

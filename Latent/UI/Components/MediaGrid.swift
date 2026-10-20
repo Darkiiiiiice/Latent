@@ -1,10 +1,17 @@
 import SwiftUI
 import AppKit
 
+/// 片库多选手势：普通勾选 / ⇧ 连续区间。
+enum MediaGridSelectionGesture: Sendable {
+    case toggle
+    case range
+}
+
 /// 媒体网格 / 列表（设计文档第 8.3、8.4 节）。
 ///
 /// - 网格：自适应列，海报卡；列表：紧凑行（小海报 + 标题 + 年份评分）。
 /// - 右键菜单统一由 `MediaContextMenu` 提供（收藏 / 清单 / 复制 TMDB ID / 链接 / 打开网站）。
+/// - 传入 `onSelect` 即启用片库多选（v1.7）：多选模式下点按为勾选，⇧ 为区间。
 struct MediaGrid: View {
     let items: [MediaSummary]
     var gridMode: Bool = true
@@ -12,6 +19,10 @@ struct MediaGrid: View {
     var emptyMessage: String = "没有找到内容"
     /// 最后一项进入可视区域时回调（无限滚动入口）。本地库等不分页场景传 nil。
     var onReachEnd: (() -> Void)?
+    /// 片库多选开关；为 nil 时保持普通「点按打开」行为。
+    var onSelect: ((MediaSummary, MediaGridSelectionGesture) -> Void)?
+    var isSelecting: Bool = false
+    var selectedIDs: Set<String> = []
 
     @Environment(AppEnvironment.self) private var appEnv
 
@@ -24,10 +35,13 @@ struct MediaGrid: View {
                 alignment: .leading,
                 spacing: UI.Spacing.gridSpacing
             ) {
-                ForEach(items) { item in
+                ForEach(items, id: \.stableID) { item in
                     PosterCard(
                         summary: item,
-                        onOpen: { open(item) },
+                        isSelecting: isSelecting,
+                        isSelected: selectedIDs.contains(item.stableID),
+                        showsHoverAction: !isSelecting,
+                        onOpen: { handleTap(item) },
                         onToggleFavorite: { appEnv.library.toggleFavorite(item) },
                         isFavorite: appEnv.library.isFavorite(item)
                     ) {
@@ -38,17 +52,37 @@ struct MediaGrid: View {
             }
         } else {
             LazyVStack(alignment: .leading, spacing: 2) {
-                ForEach(items) { item in
-                    MediaListRow(summary: item, onOpen: { open(item) })
-                        .contextMenu { MediaContextMenu(summary: item) }
-                        .onAppear { reachEndIfLast(item) }
+                ForEach(items, id: \.stableID) { item in
+                    MediaListRow(
+                        summary: item,
+                        isSelecting: isSelecting,
+                        isSelected: selectedIDs.contains(item.stableID),
+                        onOpen: { handleTap(item) }
+                    )
+                    .contextMenu { MediaContextMenu(summary: item) }
+                    .onAppear { reachEndIfLast(item) }
                 }
             }
         }
     }
 
+    /// 多选模式 / ⌘ / ⇧ 时走选择；否则打开详情。
+    /// 修饰键在 mouse-up 时读取，SwiftUI 的 TapGesture 不携带 modifier。
+    private func handleTap(_ item: MediaSummary) {
+        guard let onSelect else {
+            open(item)
+            return
+        }
+        let flags = NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if isSelecting || flags.contains(.command) || flags.contains(.shift) {
+            onSelect(item, flags.contains(.shift) ? .range : .toggle)
+        } else {
+            open(item)
+        }
+    }
+
     private func reachEndIfLast(_ item: MediaSummary) {
-        guard item.id == items.last?.id else { return }
+        guard item.stableID == items.last?.stableID else { return }
         onReachEnd?()
     }
 }
@@ -56,11 +90,20 @@ struct MediaGrid: View {
 /// 列表行：小海报 + 标题 + 年份 / 评分（渐进披露，只给判断所需字段）。
 struct MediaListRow: View {
     let summary: MediaSummary
+    var isSelecting: Bool = false
+    var isSelected: Bool = false
     let onOpen: () -> Void
     @State private var isHovering = false
 
     var body: some View {
         HStack(spacing: UI.Spacing.s3) {
+            if isSelecting {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(isSelected ? UI.Palette.accent : UI.Palette.textSecondary)
+                    .accessibilityHidden(true)
+            }
+
             PosterImage(path: summary.posterPath, displayWidth: 40, cornerRadius: 4)
                 .frame(width: 40, height: 60)
                 .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(UI.Palette.border, lineWidth: 1))
@@ -91,7 +134,13 @@ struct MediaListRow: View {
         }
         .padding(.horizontal, UI.Spacing.s2)
         .padding(.vertical, 6)
-        .background(isHovering ? UI.Palette.surfaceElevated : .clear, in: RoundedRectangle(cornerRadius: UI.Radius.button, style: .continuous))
+        .background(rowBackground, in: RoundedRectangle(cornerRadius: UI.Radius.button, style: .continuous))
+        .overlay {
+            if isSelecting && isSelected {
+                RoundedRectangle(cornerRadius: UI.Radius.button, style: .continuous)
+                    .strokeBorder(UI.Palette.accent, lineWidth: 1)
+            }
+        }
         .contentShape(Rectangle())
         .onTapGesture(perform: onOpen)
         .onHover { hovering in
@@ -99,7 +148,20 @@ struct MediaListRow: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(isSelecting ? "点按以选择或取消选择" : "点按打开详情")
+        .accessibilityAddTraits(accessibilityTraits)
+        .accessibilityAction { onOpen() }
+    }
+
+    private var rowBackground: Color {
+        if isSelecting && isSelected { return UI.Palette.accent.opacity(0.10) }
+        return isHovering ? UI.Palette.surfaceElevated : .clear
+    }
+
+    private var accessibilityTraits: AccessibilityTraits {
+        var traits: AccessibilityTraits = .isButton
+        if isSelecting && isSelected { traits.formUnion(.isSelected) }
+        return traits
     }
 
     private var accessibilityLabel: String {

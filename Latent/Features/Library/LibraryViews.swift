@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// 片单卡 sheet 的携带数据：点按「片单卡」时把 `kind` 与当前排序的列表快照一起传入。
 ///
@@ -19,10 +20,17 @@ struct LibraryView: View {
     @Environment(AppEnvironment.self) private var appEnv
     @State private var sort: SortOption = .addedAt
     @State private var playlistPresentation: PlaylistPresentation?
+    @State private var isSelecting = false
+    @State private var selectedIDs: Set<String> = []
+    @State private var selectionAnchorID: String?
+    @State private var hideUndoBar = false
+    @State private var undoKeyMonitor: Any?
 
     private var items: [LibrarySnapshot] {
         appEnv.library.items(kind: kind, sortedBy: sort)
     }
+
+    private var orderedIDs: [String] { items.map(\.id) }
 
     var body: some View {
         ScrollView {
@@ -38,7 +46,7 @@ struct LibraryView: View {
 
                     Spacer(minLength: 0)
 
-                    if !items.isEmpty {
+                    if !items.isEmpty && !isSelecting {
                         Button {
                             // 把点按瞬间的列表快照随 sheet 一起带上：用 `item` 而非
                             // `isPresented` + 另一个 @State，避免首次弹出读到空 / 旧数组
@@ -60,7 +68,22 @@ struct LibraryView: View {
                         }
                         .pickerStyle(.menu)
                         .frame(width: 140)
+
+                        Button {
+                            beginSelection()
+                        } label: {
+                            Label("选择", systemImage: "checklist")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .help("多选：批量移出或移到另一清单")
                     }
+                }
+
+                if isSelecting {
+                    selectionBar
+                } else if let change = appEnv.library.lastBatchChange, !hideUndoBar {
+                    undoBar(change)
                 }
 
                 if items.isEmpty {
@@ -71,7 +94,14 @@ struct LibraryView: View {
                         action: { AppCommandBus.select(.trending) }
                     )
                 } else {
-                    MediaGrid(items: items.map(\.asSummary), gridMode: gridMode, open: open)
+                    MediaGrid(
+                        items: items.map(\.asSummary),
+                        gridMode: gridMode,
+                        open: open,
+                        onSelect: handleSelect,
+                        isSelecting: isSelecting,
+                        selectedIDs: selectedIDs
+                    )
                 }
             }
             .padding(.horizontal, UI.Spacing.contentMargin)
@@ -81,10 +111,237 @@ struct LibraryView: View {
         .sheet(item: $playlistPresentation) { presentation in
             PlaylistSheet(kind: presentation.kind, items: presentation.items)
         }
+        .onChange(of: orderedIDs) { _, ids in
+            let valid = Set(ids)
+            selectedIDs = LibrarySelection.clamped(selectedIDs, to: valid)
+            if let selectionAnchorID, !valid.contains(selectionAnchorID) {
+                self.selectionAnchorID = nil
+            }
+            if ids.isEmpty {
+                endSelection()
+            }
+        }
+        .onChange(of: kind) { _, _ in
+            endSelection()
+        }
+        .onAppear {
+            installUndoShortcut()
+        }
+        .onDisappear {
+            removeUndoShortcut()
+        }
         .onReceive(NotificationCenter.default.publisher(for: AppCommandBus.refresh)) { _ in
             // 库数据来自本地，刷新即重读（视图已有 @Observable 联动，这里仅作界面反馈）
             ToastCenter.shared.show("已刷新")
         }
+    }
+
+    // MARK: - 多选（v1.7）
+
+    private var selectionBar: some View {
+        HStack(spacing: UI.Spacing.s3) {
+            HStack(spacing: 4) {
+                Text("已选")
+                    .font(.system(size: 12))
+                    .foregroundStyle(UI.Palette.textSecondary)
+                NumericText(
+                    text: "\(selectedIDs.count)",
+                    size: 13,
+                    weight: .semibold,
+                    color: UI.Palette.textPrimary
+                )
+                Text("部")
+                    .font(.system(size: 12))
+                    .foregroundStyle(UI.Palette.textSecondary)
+            }
+
+            Button(selectedIDs.count == items.count ? "取消全选" : "全选") {
+                toggleSelectAll()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .keyboardShortcut("a", modifiers: .command)
+            .help("全选 / 取消全选（⌘A）")
+
+            Spacer(minLength: UI.Spacing.s2)
+
+            Button(kind.opposite == .watchlist ? "移到观看清单" : "移到收藏") {
+                moveSelected()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(selectedIDs.isEmpty)
+
+            Button(kind == .favorites ? "移出收藏" : "移出观看清单", role: .destructive) {
+                removeSelected()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(selectedIDs.isEmpty)
+            .keyboardShortcut(.delete, modifiers: [])
+            .help("移出当前清单（⌫）")
+
+            Button("完成") {
+                endSelection()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .keyboardShortcut(.escape, modifiers: [])
+            .help("完成选择（Esc）")
+        }
+        .padding(.horizontal, UI.Spacing.s3)
+        .padding(.vertical, UI.Spacing.s2)
+        .background(UI.Palette.surface, in: RoundedRectangle(cornerRadius: UI.Radius.button, style: .continuous))
+        .hairlineBorder(UI.Palette.border, radius: UI.Radius.button)
+    }
+
+    private func undoBar(_ change: LibraryBatchChange) -> some View {
+        HStack(spacing: UI.Spacing.s3) {
+            Image(systemName: "arrow.uturn.backward.circle")
+                .font(.system(size: 13))
+                .foregroundStyle(UI.Palette.textSecondary)
+
+            Text(undoMessage(change))
+                .font(.system(size: 12))
+                .foregroundStyle(UI.Palette.textPrimary)
+
+            Spacer(minLength: UI.Spacing.s2)
+
+            Button("撤销") {
+                appEnv.library.undoLastBatch()
+                ToastCenter.shared.show("已撤销")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help("撤销（⌘Z）")
+
+            Button {
+                hideUndoBar = true
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .frame(width: 20, height: 20)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(UI.Palette.textSecondary)
+            .help("关闭")
+            .accessibilityLabel("关闭撤销提示")
+        }
+        .padding(.horizontal, UI.Spacing.s3)
+        .padding(.vertical, UI.Spacing.s2)
+        .background(UI.Palette.surface, in: RoundedRectangle(cornerRadius: UI.Radius.button, style: .continuous))
+        .hairlineBorder(UI.Palette.border, radius: UI.Radius.button)
+        .task(id: change.id) {
+            try? await Task.sleep(for: .seconds(8))
+            guard !Task.isCancelled else { return }
+            // 只收起提示条；撤销记录保留，⌘Z 仍可用。
+            hideUndoBar = true
+        }
+    }
+
+    private func beginSelection() {
+        isSelecting = true
+        selectedIDs = []
+        selectionAnchorID = nil
+    }
+
+    private func endSelection() {
+        isSelecting = false
+        selectedIDs = []
+        selectionAnchorID = nil
+    }
+
+    private func handleSelect(_ item: MediaSummary, _ gesture: MediaGridSelectionGesture) {
+        if !isSelecting {
+            beginSelection()
+        }
+        switch gesture {
+        case .toggle:
+            selectedIDs = LibrarySelection.toggled(item.stableID, in: selectedIDs)
+            selectionAnchorID = item.stableID
+        case .range:
+            if let anchorID = selectionAnchorID {
+                selectedIDs = LibrarySelection.range(
+                    from: anchorID,
+                    through: item.stableID,
+                    in: orderedIDs
+                )
+            } else {
+                selectedIDs = [item.stableID]
+                selectionAnchorID = item.stableID
+            }
+        }
+    }
+
+    private func toggleSelectAll() {
+        if selectedIDs.count == items.count {
+            selectedIDs = []
+            selectionAnchorID = nil
+        } else {
+            selectedIDs = Set(orderedIDs)
+            selectionAnchorID = orderedIDs.first
+        }
+    }
+
+    private func removeSelected() {
+        guard let change = appEnv.library.removeItems(ids: selectedIDs, from: kind) else { return }
+        hideUndoBar = false
+        ToastCenter.shared.show("已从\(kind.title)移出 \(change.snapshots.count) 部")
+        endSelection()
+    }
+
+    private func moveSelected() {
+        let destination = kind.opposite
+        guard let change = appEnv.library.moveItems(ids: selectedIDs, from: kind, to: destination) else {
+            return
+        }
+        hideUndoBar = false
+        ToastCenter.shared.show("已移到\(destination.title) \(change.snapshots.count) 部")
+        endSelection()
+    }
+
+    private func undoMessage(_ change: LibraryBatchChange) -> String {
+        let count = change.snapshots.count
+        if let destination = change.destination {
+            return "已移到\(destination.title) \(count) 部"
+        }
+        return "已从\(change.source.title)移出 \(count) 部"
+    }
+
+    // MARK: - ⌘Z（片库页定向）
+
+    /// SwiftUI 窗口在无文本焦点时不提供可用的 UndoManager；
+    /// 这里在片库页单独监听 ⌘Z，避免影响搜索框里的文字撤销。
+    private func installUndoShortcut() {
+        guard undoKeyMonitor == nil else { return }
+        undoKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let handled = MainActor.assumeIsolated { () -> Bool in
+                let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+                guard flags.contains(.command),
+                      !flags.contains(.shift),
+                      !flags.contains(.option),
+                      !flags.contains(.control),
+                      event.charactersIgnoringModifiers?.lowercased() == "z",
+                      appEnv.library.lastBatchChange != nil,
+                      NSApp.keyWindow?.sheetParent == nil,
+                      !(NSApp.keyWindow?.firstResponder is NSTextView)
+                else {
+                    return false
+                }
+                appEnv.library.undoLastBatch()
+                hideUndoBar = false
+                ToastCenter.shared.show("已撤销")
+                return true
+            }
+            return handled ? nil : event
+        }
+    }
+
+    private func removeUndoShortcut() {
+        if let undoKeyMonitor {
+            NSEvent.removeMonitor(undoKeyMonitor)
+        }
+        undoKeyMonitor = nil
     }
 }
 
