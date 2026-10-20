@@ -23,6 +23,8 @@ struct MediaGrid: View {
     var onSelect: ((MediaSummary, MediaGridSelectionGesture) -> Void)?
     var isSelecting: Bool = false
     var selectedIDs: Set<String> = []
+    /// 片库页才显示右键「移到另一清单」（v1.7.1）；其他页面保持原菜单。
+    var allowsLibraryMove: Bool = false
 
     @Environment(AppEnvironment.self) private var appEnv
 
@@ -45,7 +47,7 @@ struct MediaGrid: View {
                         onToggleFavorite: { appEnv.library.toggleFavorite(item) },
                         isFavorite: appEnv.library.isFavorite(item)
                     ) {
-                        MediaContextMenu(summary: item)
+                        MediaContextMenu(summary: item, allowsLibraryMove: allowsLibraryMove)
                     }
                     .onAppear { reachEndIfLast(item) }
                 }
@@ -59,7 +61,7 @@ struct MediaGrid: View {
                         isSelected: selectedIDs.contains(item.stableID),
                         onOpen: { handleTap(item) }
                     )
-                    .contextMenu { MediaContextMenu(summary: item) }
+                    .contextMenu { MediaContextMenu(summary: item, allowsLibraryMove: allowsLibraryMove) }
                     .onAppear { reachEndIfLast(item) }
                 }
             }
@@ -175,6 +177,7 @@ struct MediaListRow: View {
 /// 统一右键菜单（设计文档第 8.4 节）。
 struct MediaContextMenu: View {
     let summary: MediaSummary
+    var allowsLibraryMove: Bool = false
 
     @Environment(AppEnvironment.self) private var appEnv
 
@@ -183,16 +186,32 @@ struct MediaContextMenu: View {
 
     var body: some View {
         Button(isFavorite ? "移出收藏" : "加入收藏") {
+            let wasFavorite = isFavorite
             appEnv.library.toggleFavorite(summary)
-            ToastCenter.shared.show(isFavorite ? "已移出收藏" : "已加入收藏")
+            ToastCenter.shared.show(wasFavorite ? "已移出收藏" : "已加入收藏")
         }
         .disabled(!summary.mediaKind.isLibraryEligible)
 
         Button(isInWatchlist ? "移出观看清单" : "加入观看清单") {
+            let wasInWatchlist = isInWatchlist
             appEnv.library.toggleWatchlist(summary)
-            ToastCenter.shared.show(isInWatchlist ? "已移出观看清单" : "已加入观看清单")
+            ToastCenter.shared.show(wasInWatchlist ? "已移出观看清单" : "已加入观看清单")
         }
         .disabled(!summary.mediaKind.isLibraryEligible)
+
+        if allowsLibraryMove, isFavorite, !isInWatchlist {
+            Divider()
+            Button("移到观看清单") {
+                appEnv.library.moveToWatchlist(summary)
+                ToastCenter.shared.show("已移到观看清单")
+            }
+        } else if allowsLibraryMove, isInWatchlist, !isFavorite {
+            Divider()
+            Button("移到收藏") {
+                appEnv.library.moveToFavorites(summary)
+                ToastCenter.shared.show("已移到收藏")
+            }
+        }
 
         Divider()
 

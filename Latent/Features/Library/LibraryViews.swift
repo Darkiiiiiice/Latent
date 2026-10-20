@@ -23,7 +23,7 @@ struct LibraryView: View {
     @State private var isSelecting = false
     @State private var selectedIDs: Set<String> = []
     @State private var selectionAnchorID: String?
-    @State private var hideUndoBar = false
+    @State private var dismissedChangeID: UUID?
     @State private var undoKeyMonitor: Any?
 
     private var items: [LibrarySnapshot] {
@@ -82,7 +82,7 @@ struct LibraryView: View {
 
                 if isSelecting {
                     selectionBar
-                } else if let change = appEnv.library.lastBatchChange, !hideUndoBar {
+                } else if let change = appEnv.library.lastChange, change.id != dismissedChangeID {
                     undoBar(change)
                 }
 
@@ -100,7 +100,8 @@ struct LibraryView: View {
                         open: open,
                         onSelect: handleSelect,
                         isSelecting: isSelecting,
-                        selectedIDs: selectedIDs
+                        selectedIDs: selectedIDs,
+                        allowsLibraryMove: true
                     )
                 }
             }
@@ -195,7 +196,7 @@ struct LibraryView: View {
         .hairlineBorder(UI.Palette.border, radius: UI.Radius.button)
     }
 
-    private func undoBar(_ change: LibraryBatchChange) -> some View {
+    private func undoBar(_ change: LibraryChange) -> some View {
         HStack(spacing: UI.Spacing.s3) {
             Image(systemName: "arrow.uturn.backward.circle")
                 .font(.system(size: 13))
@@ -208,7 +209,7 @@ struct LibraryView: View {
             Spacer(minLength: UI.Spacing.s2)
 
             Button("撤销") {
-                appEnv.library.undoLastBatch()
+                appEnv.library.undoLastChange()
                 ToastCenter.shared.show("已撤销")
             }
             .buttonStyle(.bordered)
@@ -216,7 +217,7 @@ struct LibraryView: View {
             .help("撤销（⌘Z）")
 
             Button {
-                hideUndoBar = true
+                dismissedChangeID = change.id
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .semibold))
@@ -235,7 +236,7 @@ struct LibraryView: View {
             try? await Task.sleep(for: .seconds(8))
             guard !Task.isCancelled else { return }
             // 只收起提示条；撤销记录保留，⌘Z 仍可用。
-            hideUndoBar = true
+            dismissedChangeID = change.id
         }
     }
 
@@ -285,7 +286,6 @@ struct LibraryView: View {
 
     private func removeSelected() {
         guard let change = appEnv.library.removeItems(ids: selectedIDs, from: kind) else { return }
-        hideUndoBar = false
         ToastCenter.shared.show("已从\(kind.title)移出 \(change.snapshots.count) 部")
         endSelection()
     }
@@ -295,17 +295,17 @@ struct LibraryView: View {
         guard let change = appEnv.library.moveItems(ids: selectedIDs, from: kind, to: destination) else {
             return
         }
-        hideUndoBar = false
         ToastCenter.shared.show("已移到\(destination.title) \(change.snapshots.count) 部")
         endSelection()
     }
 
-    private func undoMessage(_ change: LibraryBatchChange) -> String {
+    private func undoMessage(_ change: LibraryChange) -> String {
         let count = change.snapshots.count
+        let suffix = count == 1 ? "" : " \(count) 部"
         if let destination = change.destination {
-            return "已移到\(destination.title) \(count) 部"
+            return "已移到\(destination.title)\(suffix)"
         }
-        return "已从\(change.source.title)移出 \(count) 部"
+        return "已从\(change.source.title)移出\(suffix)"
     }
 
     // MARK: - ⌘Z（片库页定向）
@@ -322,14 +322,13 @@ struct LibraryView: View {
                       !flags.contains(.option),
                       !flags.contains(.control),
                       event.charactersIgnoringModifiers?.lowercased() == "z",
-                      appEnv.library.lastBatchChange != nil,
+                      appEnv.library.lastChange != nil,
                       NSApp.keyWindow?.sheetParent == nil,
                       !(NSApp.keyWindow?.firstResponder is NSTextView)
                 else {
                     return false
                 }
-                appEnv.library.undoLastBatch()
-                hideUndoBar = false
+                appEnv.library.undoLastChange()
                 ToastCenter.shared.show("已撤销")
                 return true
             }

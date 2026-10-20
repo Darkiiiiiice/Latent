@@ -141,6 +141,120 @@ struct LibraryStoreTests {
         #expect(summary.year == 2024)
     }
 
+    // MARK: - 单条操作（v1.7.1）
+
+    @Test("单条移出收藏：撤销按原添加时间恢复")
+    func singleRemoveAndUndo() throws {
+        let (library, _, _) = makeStores()
+        library.toggleFavorite(dune)
+        let original = try #require(library.favoriteItems.first { $0.tmdbID == dune.id })
+
+        #expect(library.toggleFavorite(dune) == false)
+        let change = try #require(library.lastChange)
+        #expect(library.favoriteCount == 0)
+        #expect(change.source == .favorites)
+        #expect(change.destination == nil)
+        #expect(change.snapshots.map(\.id) == [dune.stableID])
+
+        library.undoLastChange()
+
+        let restored = try #require(library.favoriteItems.first { $0.tmdbID == dune.id })
+        #expect(library.favoriteCount == 1)
+        #expect(restored.addedAt == original.addedAt)
+        #expect(library.lastChange == nil)
+    }
+
+    @Test("单条移出观看清单：撤销按原添加时间恢复")
+    func singleWatchlistRemoveAndUndo() throws {
+        let (library, _, _) = makeStores()
+        library.toggleWatchlist(dune)
+        let original = try #require(library.watchlistItems.first { $0.tmdbID == dune.id })
+
+        #expect(library.toggleWatchlist(dune) == false)
+        let change = try #require(library.lastChange)
+        #expect(library.watchlistCount == 0)
+        #expect(change.source == .watchlist)
+        #expect(change.destination == nil)
+
+        library.undoLastChange()
+
+        let restored = try #require(library.watchlistItems.first { $0.tmdbID == dune.id })
+        #expect(library.watchlistCount == 1)
+        #expect(restored.addedAt == original.addedAt)
+        #expect(library.lastChange == nil)
+    }
+
+    @Test("单条移动：撤销恢复源清单并移除本次新增")
+    func singleMoveAndUndo() throws {
+        let (library, _, _) = makeStores()
+        library.toggleFavorite(dune)
+        let original = try #require(library.favoriteItems.first { $0.tmdbID == dune.id })
+
+        let change = try #require(library.moveToWatchlist(dune))
+        #expect(library.favoriteCount == 0)
+        #expect(library.watchlistCount == 1)
+        #expect(change.source == .favorites)
+        #expect(change.destination == .watchlist)
+        #expect(change.destinationIDsAdded == [dune.stableID])
+
+        library.undoLastChange()
+
+        let restored = try #require(library.favoriteItems.first { $0.tmdbID == dune.id })
+        #expect(library.favoriteCount == 1)
+        #expect(library.watchlistCount == 0)
+        #expect(restored.addedAt == original.addedAt)
+        #expect(library.lastChange == nil)
+    }
+
+    @Test("单条移动：观看清单 → 收藏撤销恢复")
+    func singleMoveToFavoritesAndUndo() throws {
+        let (library, _, _) = makeStores()
+        library.toggleWatchlist(dune)
+        let original = try #require(library.watchlistItems.first { $0.tmdbID == dune.id })
+
+        let change = try #require(library.moveToFavorites(dune))
+        #expect(library.watchlistCount == 0)
+        #expect(library.favoriteCount == 1)
+        #expect(change.source == .watchlist)
+        #expect(change.destination == .favorites)
+
+        library.undoLastChange()
+
+        let restored = try #require(library.watchlistItems.first { $0.tmdbID == dune.id })
+        #expect(library.watchlistCount == 1)
+        #expect(library.favoriteCount == 0)
+        #expect(restored.addedAt == original.addedAt)
+    }
+
+    @Test("单条移动：目标原本已有条目不覆盖添加时间")
+    func singleMovePreservesExistingDestination() throws {
+        let (library, _, _) = makeStores()
+        library.toggleFavorite(dune)
+        library.toggleWatchlist(dune)
+        let watchlistOriginal = try #require(library.watchlistItems.first { $0.tmdbID == dune.id })
+
+        let change = try #require(library.moveToWatchlist(dune))
+        #expect(change.destinationIDsAdded.isEmpty)
+        #expect(library.favoriteCount == 0)
+        #expect(library.watchlistCount == 1)
+        #expect(library.watchlistItems.first?.addedAt == watchlistOriginal.addedAt)
+
+        library.undoLastChange()
+
+        #expect(library.favoriteCount == 1)
+        #expect(library.watchlistCount == 1)
+        #expect(library.isFavorite(dune))
+        #expect(library.watchlistItems.first?.addedAt == watchlistOriginal.addedAt)
+    }
+
+    @Test("单条移动：源清单没有条目不产生撤销记录")
+    func singleMoveNoSource() {
+        let (library, _, _) = makeStores()
+        #expect(library.moveToWatchlist(dune) == nil)
+        #expect(library.moveToFavorites(dune) == nil)
+        #expect(library.lastChange == nil)
+    }
+
     // MARK: - 批量操作（v1.7）
 
     private var interstellar: MediaSummary {
@@ -161,14 +275,14 @@ struct LibraryStoreTests {
 
         #expect(library.favoriteCount == 1)
         #expect(change.snapshots.count == 1)
-        #expect(library.lastBatchChange?.id == change.id)
+        #expect(library.lastChange?.id == change.id)
 
         library.undo(change)
 
         let restored = try #require(library.favoriteItems.first { $0.tmdbID == dune.id })
         #expect(library.favoriteCount == 2)
         #expect(restored.addedAt == original.addedAt)
-        #expect(library.lastBatchChange == nil)
+        #expect(library.lastChange == nil)
     }
 
     @Test("批量移动：撤销只移除本次新增，原本已在目标清单的保留")
@@ -204,7 +318,7 @@ struct LibraryStoreTests {
         #expect(library.removeItems(ids: [], from: .favorites) == nil)
         #expect(library.removeItems(ids: ["movie-404"], from: .favorites) == nil)
         #expect(library.moveItems(ids: ["movie-404"], from: .favorites, to: .watchlist) == nil)
-        #expect(library.lastBatchChange == nil)
+        #expect(library.lastChange == nil)
     }
 
     @Test("刷新展示字段不改变添加时间")

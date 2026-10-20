@@ -2,12 +2,12 @@ import Foundation
 import SwiftData
 import OSLog
 
-/// 一次批量移出 / 移动的可撤销记录（v1.7）。
+/// 一次单条 / 批量移出或移动的可撤销记录（v1.7，v1.7.1 泛化）。
 ///
 /// `snapshots` 是操作前的源清单快照，撤销时按原 `addedAt` 放回；
 /// `destinationIDsAdded` 只记录本次真正新增到目标清单的条目——撤销时只移除这些，
 /// 移动前已在目标清单的条目保持不动。
-struct LibraryBatchChange: Identifiable, Sendable, Equatable {
+struct LibraryChange: Identifiable, Sendable, Equatable {
     let id: UUID
     let source: LibraryKind
     let destination: LibraryKind?
@@ -44,8 +44,8 @@ final class LibraryStore {
     private(set) var favoriteItems: [LibrarySnapshot] = []
     private(set) var watchlistItems: [LibrarySnapshot] = []
 
-    /// 最近一次批量操作；供内联「撤销」与片库页 `⌘Z` 共用。
-    private(set) var lastBatchChange: LibraryBatchChange?
+    /// 最近一次可撤销的片库操作（单条 / 批量）；供内联「撤销」与片库页 `⌘Z` 共用。
+    private(set) var lastChange: LibraryChange?
 
     /// 库内容变化（增删 / 详情回填）后的回调；AppEnvironment 用它刷新 Spotlight 索引。
     var onChange: (() -> Void)?
@@ -82,18 +82,13 @@ final class LibraryStore {
         return true
     }
 
-    /// 移除成功返回 true；未收藏返回 nil。
+    /// 移除成功返回 true；未收藏返回 nil。单条移出同样写入撤销记录（v1.7.1）。
     @discardableResult
     func removeFavorite(_ summary: MediaSummary) -> Bool? {
-        guard favoriteIDs.contains(Self.key(for: summary)) else { return nil }
-        let kind = summary.mediaKind.rawValue
-        let id = summary.id
-        let descriptor = FetchDescriptor<FavoriteItem>(
-            predicate: #Predicate { $0.mediaType == kind && $0.tmdbID == id }
-        )
-        for item in (try? context.fetch(descriptor)) ?? [] {
-            context.delete(item)
-        }
+        let key = Self.key(for: summary)
+        guard let snapshot = favoriteItems.first(where: { $0.id == key }) else { return nil }
+        deleteRecords(ids: [key], from: .favorites)
+        lastChange = LibraryChange(source: .favorites, destination: nil, snapshots: [snapshot])
         saveAndReload()
         return true
     }
@@ -115,44 +110,45 @@ final class LibraryStore {
         return true
     }
 
+    /// 移除成功返回 true；不在清单返回 nil。单条移出同样写入撤销记录（v1.7.1）。
     @discardableResult
     func removeFromWatchlist(_ summary: MediaSummary) -> Bool? {
-        guard watchlistIDs.contains(Self.key(for: summary)) else { return nil }
-        let kind = summary.mediaKind.rawValue
-        let id = summary.id
-        let descriptor = FetchDescriptor<WatchlistItem>(
-            predicate: #Predicate { $0.mediaType == kind && $0.tmdbID == id }
-        )
-        for item in (try? context.fetch(descriptor)) ?? [] {
-            context.delete(item)
-        }
+        let key = Self.key(for: summary)
+        guard let snapshot = watchlistItems.first(where: { $0.id == key }) else { return nil }
+        deleteRecords(ids: [key], from: .watchlist)
+        lastChange = LibraryChange(source: .watchlist, destination: nil, snapshots: [snapshot])
         saveAndReload()
         return true
     }
 
     /// 把观看清单条目移入收藏并移出清单（右键菜单用）。
-    func moveToFavorites(_ summary: MediaSummary) {
-        removeFromWatchlist(summary)
-        LibraryStoreWriter.upsertFavorite(summary, into: context)
-        saveAndReload()
+    @discardableResult
+    func moveToFavorites(_ summary: MediaSummary) -> LibraryChange? {
+        moveSingle(summary, from: .watchlist, to: .favorites)
+    }
+
+    /// 把收藏条目移入观看清单并移出收藏（右键菜单用）。
+    @discardableResult
+    func moveToWatchlist(_ summary: MediaSummary) -> LibraryChange? {
+        moveSingle(summary, from: .favorites, to: .watchlist)
     }
 
     // MARK: - 批量（v1.7）
 
     /// 批量移出当前清单；返回可撤销记录。没有任何匹配条目时返回 nil。
     @discardableResult
-    func removeItems(ids: Set<String>, from kind: LibraryKind) -> LibraryBatchChange? {
+    func removeItems(ids: Set<String>, from kind: LibraryKind) -> LibraryChange? {
         guard !ids.isEmpty else { return nil }
         let snapshots = items(in: kind).filter { ids.contains($0.id) }
         guard !snapshots.isEmpty else { return nil }
 
         deleteRecords(ids: Set(snapshots.map(\.id)), from: kind)
-        let change = LibraryBatchChange(
+        let change = LibraryChange(
             source: kind,
             destination: nil,
             snapshots: snapshots
         )
-        lastBatchChange = change
+        lastChange = change
         saveAndReload()
         return change
     }
@@ -163,7 +159,7 @@ final class LibraryStore {
         ids: Set<String>,
         from source: LibraryKind,
         to destination: LibraryKind
-    ) -> LibraryBatchChange? {
+    ) -> LibraryChange? {
         guard source != destination, !ids.isEmpty else { return nil }
         let snapshots = items(in: source).filter { ids.contains($0.id) }
         guard !snapshots.isEmpty else { return nil }
@@ -176,33 +172,33 @@ final class LibraryStore {
         }
         deleteRecords(ids: Set(snapshots.map(\.id)), from: source)
 
-        let change = LibraryBatchChange(
+        let change = LibraryChange(
             source: source,
             destination: destination,
             snapshots: snapshots,
             destinationIDsAdded: added
         )
-        lastBatchChange = change
+        lastChange = change
         saveAndReload()
         return change
     }
 
-    /// 撤销一次批量操作：目标清单只移除本次新增的条目，源清单按原 `addedAt` 恢复。
-    func undo(_ change: LibraryBatchChange) {
+    /// 撤销一次单条 / 批量操作：目标清单只移除本次新增的条目，源清单按原 `addedAt` 恢复。
+    func undo(_ change: LibraryChange) {
         if let destination = change.destination {
             deleteRecords(ids: change.destinationIDsAdded, from: destination)
         }
         for snapshot in change.snapshots {
             upsert(snapshot, into: change.source, addedAt: snapshot.addedAt)
         }
-        if lastBatchChange?.id == change.id {
-            lastBatchChange = nil
+        if lastChange?.id == change.id {
+            lastChange = nil
         }
         saveAndReload()
     }
 
-    func undoLastBatch() {
-        guard let change = lastBatchChange else { return }
+    func undoLastChange() {
+        guard let change = lastChange else { return }
         undo(change)
     }
 
@@ -240,6 +236,34 @@ final class LibraryStore {
     }
 
     // MARK: - 内部
+
+    /// 单条移动：只移除源条目；目标原本已有该条目时保留其 `addedAt`，撤销只删本次新增。
+    @discardableResult
+    private func moveSingle(
+        _ summary: MediaSummary,
+        from source: LibraryKind,
+        to destination: LibraryKind
+    ) -> LibraryChange? {
+        guard source != destination else { return nil }
+        let key = Self.key(for: summary)
+        guard let snapshot = items(in: source).first(where: { $0.id == key }) else { return nil }
+
+        let alreadyInDestination = items(in: destination).contains { $0.id == key }
+        if !alreadyInDestination {
+            upsert(snapshot, into: destination)
+        }
+        deleteRecords(ids: [key], from: source)
+
+        let change = LibraryChange(
+            source: source,
+            destination: destination,
+            snapshots: [snapshot],
+            destinationIDsAdded: alreadyInDestination ? [] : [key]
+        )
+        lastChange = change
+        saveAndReload()
+        return change
+    }
 
     private func items(in kind: LibraryKind) -> [LibrarySnapshot] {
         kind == .favorites ? favoriteItems : watchlistItems
