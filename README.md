@@ -99,6 +99,23 @@ Token 只保存在本机钥匙串，不写日志、不进数据库、不入库�
 | 网络 · 代理 | 跟随系统（默认）/ 手动填 HTTP(S) 或 SOCKS5 主机与端口 |
 | 缓存 | 查看占用、一键清理 |
 
+## 快捷键
+
+| 快捷键 | 作用 |
+|---|---|
+| `⌘F` | 聚焦搜索 |
+| `⌘R` | 刷新当前页 |
+| `⌘[` | 返回上一页 |
+| `⌘1` – `⌘5` | 趋势 / 发现 / 收藏 / 观看清单 / 历史 |
+| `⌘D` | 收藏当前作品（再按一次移出） |
+| `⇧⌘D` | 加入 / 移出观看清单 |
+| `⌘,` | 打开设置 |
+| `↑` `↓` `↵` | 网格 / 列表中移动焦点、打开 |
+| `Esc` | 清空搜索或返回；多选中退出 |
+| `⌘A` | 多选全选 |
+| `⌫` | 多选中移出当前清单 |
+| `⌘Z` | 撤销最近一次片库移出 / 移动（单条或批量） |
+
 ## 图片展示
 
 **分享卡风格**（同一部电影、同一张海报；共七款，下图示例四款：热敏小票 / 电影票根 / 暗房底片 / 咖啡杯贴）
@@ -108,6 +125,39 @@ Token 只保存在本机钥匙串，不写日志、不进数据库、不入库�
 **单张细节**：咖啡杯贴（碳黑底 + 杨绿强调、圆形封面、顶部色带）
 
 ![咖啡杯贴分享卡](docs/images/receipt-cup-sticker.png)
+
+## 系统要求与构建
+
+- **macOS 27 或更高**——应用按最新系统能力编写，不写向下兼容分支。
+- 纯 **Swift + SwiftUI**，**0 第三方依赖**（不含开发期工具）；Swift 6 严格并发，数据本地 SwiftData，不启用 CloudKit / iCloud。
+- `Latent.xcodeproj` **不入库**，由 [XcodeGen](https://github.com/yonaskolb/XcodeGen) 从 `project.yml` 生成——改动 `project.yml` 或新增源文件后都要重新生成。
+
+```bash
+brew install xcodegen          # 只需一次
+xcodegen generate              # 生成 Latent.xcodeproj
+
+# 构建
+xcodebuild -project Latent.xcodeproj -scheme Latent -configuration Debug build
+
+# 测试（Swift Testing + 内存 ModelContainer + URLProtocol stub）
+xcodebuild test -project Latent.xcodeproj -scheme Latent
+```
+
+分发定位为自用：不做公证与上架，但 App Sandbox 与 Hardened Runtime 照常配置。首次运行需自备 TMDB Read Access Token（见上文）。
+
+## 版本进展
+
+| 版本 | 内容 |
+|---|---|
+| v1.0 | P0–P4：趋势 / 搜索 / 发现、详情（含剧集分集与人物）、收藏 / 观看清单 / 历史、设置与缓存 |
+| v1.1 | Spotlight 索引与快捷指令、JSON / Markdown 导出 |
+| v1.2 | 票据分享卡：七款风格 + 「保留封面原色」「卡片配色取自封面」两个开关 |
+| v1.3 | 分享卡扩展到剧集与人物（三类共用同一卡面与管线） |
+| v1.4 | 「来一部」随机发现；分享卡走系统分享菜单 |
+| v1.5 | 「在哪看」观看平台，分地区在线看 / 租借 / 购买 |
+| v1.6 | 片单分享卡（1–12 部自适应网格） |
+| v1.7 | 片库多选与批量整理，`⌘Z` / 内联撤销 |
+| v1.8 | 拼音搜索：片库筛选框 + 全局搜索「片库」结果组（纯本地，断网可用） |
 
 ## 常见问题
 
