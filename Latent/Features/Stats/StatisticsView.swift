@@ -9,6 +9,8 @@ import SwiftUI
 struct StatisticsView: View {
     @Environment(AppEnvironment.self) private var appEnv
 
+    /// 观影护照地图的相机：随已点亮国家变化重新拟合。
+    @State private var camera: MapCameraPosition = .region(Self.worldRegion)
     /// 「按口味来一部」上一次选中的条目，避免连点两次看到同一部。
     @State private var lastTastePickID: String?
 
@@ -464,7 +466,7 @@ struct StatisticsView: View {
             caption: "已点亮 \(statistics.passport.count) 个国家和地区"
         ) {
             Map(
-                initialPosition: .region(Self.region(fitting: statistics.passport)),
+                position: $camera,
                 interactionModes: [.pan, .zoom]
             ) {
                 ForEach(statistics.passport) { stamp in
@@ -488,6 +490,10 @@ struct StatisticsView: View {
                     .strokeBorder(UI.Palette.border, lineWidth: 1)
             }
             .accessibilityLabel("观影护照地图，已点亮 \(statistics.passport.count) 个国家和地区")
+        }
+        // 回填是异步的：数据到位后重新拟合相机，否则会停在没有标注的默认视野。
+        .task(id: statistics.passport.map(\.code)) {
+            camera = Self.cameraPosition(fitting: statistics.passport)
         }
     }
 
@@ -560,45 +566,41 @@ struct StatisticsView: View {
     /// 没有数据时的全球视野；跨度控制在 MapKit 稳定范围内（纬度 ≤ 150、经度 ≤ 320）。
     private static var worldRegion: MKCoordinateRegion {
         MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: 10, longitude: 0),
-            span: MKCoordinateSpan(latitudeDelta: 150, longitudeDelta: 320)
+            center: CLLocationCoordinate2D(latitude: 20, longitude: 10),
+            span: MKCoordinateSpan(latitudeDelta: 120, longitudeDelta: 260)
         )
     }
 
-    /// 按实际标注点拟合视野：留 40% 边距，并保证最小跨度，
-    /// 避免只点亮一个国家时相机怼到街道级别、也避免跨日期变更线时算出非法跨度。
-    private static func region(
+    /// 用 `MKMapRect` 拟合全部标注点：相比手工算经纬度跨度，`rect` 会保持宽高比，
+    /// 不会出现「跨度被 MapKit 夹取后只剩非洲」的情况。
+    /// 单点时保留最小尺寸，避免相机怼到街道级别。
+    private static func cameraPosition(
         fitting stamps: [LibraryStatistics.CountryStamp]
-    ) -> MKCoordinateRegion {
-        let infos = stamps.compactMap { CountryDirectory.info(for: $0.code) }
-        guard let first = infos.first else { return worldRegion }
-        guard infos.count > 1 else {
-            return MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: first.latitude, longitude: first.longitude),
-                span: MKCoordinateSpan(latitudeDelta: 40, longitudeDelta: 50)
-            )
+    ) -> MapCameraPosition {
+        let points = stamps.compactMap { stamp -> MKMapPoint? in
+            guard let info = CountryDirectory.info(for: stamp.code) else { return nil }
+            return MKMapPoint(coordinate(info))
         }
+        guard let first = points.first else { return .region(worldRegion) }
 
-        var minLatitude = first.latitude
-        var maxLatitude = first.latitude
-        var minLongitude = first.longitude
-        var maxLongitude = first.longitude
-        for info in infos.dropFirst() {
-            minLatitude = min(minLatitude, info.latitude)
-            maxLatitude = max(maxLatitude, info.latitude)
-            minLongitude = min(minLongitude, info.longitude)
-            maxLongitude = max(maxLongitude, info.longitude)
+        // 注意：零尺寸的 MKMapRect 会被 union 当成空矩形丢弃，这里直接取极值。
+        var minX = first.x
+        var maxX = first.x
+        var minY = first.y
+        var maxY = first.y
+        for point in points.dropFirst() {
+            minX = min(minX, point.x)
+            maxX = max(maxX, point.x)
+            minY = min(minY, point.y)
+            maxY = max(maxY, point.y)
         }
+        let rect = MKMapRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
 
-        let latitudeSpan = min(max((maxLatitude - minLatitude) * 1.4, 26), 150)
-        let longitudeSpan = min(max((maxLongitude - minLongitude) * 1.4, 36), 320)
-        return MKCoordinateRegion(
-            center: CLLocationCoordinate2D(
-                latitude: (minLatitude + maxLatitude) / 2,
-                longitude: (minLongitude + maxLongitude) / 2
-            ),
-            span: MKCoordinateSpan(latitudeDelta: latitudeSpan, longitudeDelta: longitudeSpan)
-        )
+        // 25% 边距；下限约一个大陆的尺度（世界宽 2^28 点，1° 经度 ≈ 74.6 万点）。
+        let dx = max(rect.width * 0.25, 6_000_000)
+        let dy = max(rect.height * 0.25, 3_000_000)
+        let padded = rect.insetBy(dx: -dx, dy: -dy).intersection(.world)
+        return .rect(padded)
     }
 
     private static func coordinate(_ info: CountryDirectory.Info) -> CLLocationCoordinate2D {
@@ -806,9 +808,10 @@ struct ChartCard<Content: View>: View {
             }
 
             content
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .padding(UI.Spacing.s4)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(UI.Palette.surface, in: RoundedRectangle(cornerRadius: UI.Radius.button, style: .continuous))
         .hairlineBorder(UI.Palette.border, radius: UI.Radius.button)
     }
