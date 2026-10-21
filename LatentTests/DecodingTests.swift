@@ -115,6 +115,37 @@ struct DecodingTests {
         #expect(detail.facts.first?.value == "连载中")
     }
 
+    @Test("电影详情：belongs_to_collection 定位系列（v1.19）")
+    func movieCollectionLink() throws {
+        let detail = try decoder.decode(MovieDetail.self, from: Fixtures.data("movie_detail"))
+        let collection = try #require(detail.belongsToCollection)
+        #expect(collection.id == 726871)
+        #expect(collection.name == "沙丘合集")
+        #expect(collection.posterPath == "/lr11mCT85T1JanlgjMqgMhtEDby.jpg")
+    }
+
+    @Test("系列详情：parts 推断为电影；缺上映日期的排在最后")
+    func collection() throws {
+        let collection = try decoder.decode(MovieCollection.self, from: Fixtures.data("collection"))
+        #expect(collection.id == 726871)
+        #expect(collection.name == "沙丘合集")
+        #expect(collection.parts.count == 3)
+        #expect(collection.parts.allSatisfy { $0.mediaKind == .movie })
+
+        // fixture 里第三部 release_date 为 null，应被排到末尾。
+        let ordered = collection.orderedParts
+        #expect(ordered.map(\.id) == [438631, 693134, 999001])
+        #expect(ordered.last?.dateString == nil)
+    }
+
+    @Test("系列详情：缺 parts / 缺 id 不崩")
+    func collectionTolerance() throws {
+        let empty = try decoder.decode(MovieCollection.self, from: Data(#"{"name":"空系列"}"#.utf8))
+        #expect(empty.parts.isEmpty)
+        #expect(empty.id == 0)
+        #expect(empty.orderedParts.isEmpty)
+    }
+
     @Test("剧集追更：缺 next_episode_to_air 不报错")
     func tvWithoutNextEpisode() throws {
         // movie_detail.json 里没有该字段；换成 TV 端点数据的最小形态验证可选性。

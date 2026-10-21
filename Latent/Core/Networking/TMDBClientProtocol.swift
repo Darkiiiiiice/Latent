@@ -9,6 +9,7 @@ protocol TMDBClientProtocol: Sendable {
     func tvDetail(id: Int) async throws -> TVShowDetail
     func tvSeason(id: Int, seasonNumber: Int) async throws -> SeasonDetail
     func personDetail(id: Int) async throws -> PersonDetail
+    func collection(id: Int) async throws -> MovieCollection
     func discover(mediaKind: MediaKind, query: DiscoverQuery, page: Int) async throws -> Paged<MediaSummary>
     func genreList(mediaKind: MediaKind) async throws -> [Genre]
     func watchProviders(mediaKind: MediaKind, region: String) async throws -> [WatchProvider]
@@ -38,6 +39,7 @@ struct MockTMDBClient: TMDBClientProtocol {
     var show: TVShowDetail = .sample
     var season: SeasonDetail = .sample
     var person: PersonDetail = .sample
+    var collection: MovieCollection = .sample
     var discoverPage = Paged(page: 1, items: MediaSummary.samples(count: 18, kind: .movie), totalPages: 2, totalResults: 36)
     var genres: [Genre] = Genre.samples
     var providers: [WatchProvider] = WatchProvider.samples
@@ -54,6 +56,7 @@ struct MockTMDBClient: TMDBClientProtocol {
     func tvDetail(id: Int) async throws -> TVShowDetail { show }
     func tvSeason(id: Int, seasonNumber: Int) async throws -> SeasonDetail { season }
     func personDetail(id: Int) async throws -> PersonDetail { person }
+    func collection(id: Int) async throws -> MovieCollection { collection }
     func discover(mediaKind: MediaKind, query: DiscoverQuery, page: Int) async throws -> Paged<MediaSummary> { discoverPage }
     func genreList(mediaKind: MediaKind) async throws -> [Genre] { genres }
     func watchProviders(mediaKind: MediaKind, region: String) async throws -> [WatchProvider] { providers }
@@ -169,5 +172,17 @@ extension PersonDetail {
         birthday: "1995-12-27", placeOfBirth: "美国纽约",
         knownForDepartment: "Acting",
         combinedCredits: CombinedCredits(cast: MediaSummary.samples(count: 12, kind: .movie))
+    )
+}
+
+extension MovieCollection {
+    static let sample = MovieCollection(
+        id: 726_871, name: "沙丘系列",
+        overview: "保罗·厄崔迪的复仇与崛起。",
+        parts: [
+            MediaSummary(id: 438_631, mediaKind: .movie, title: "沙丘", dateString: "2021-10-22", voteAverage: 7.8),
+            MediaSummary(id: 693_134, mediaKind: .movie, title: "沙丘：第二部", dateString: "2024-02-27", voteAverage: 8.1),
+            MediaSummary(id: 999_001, mediaKind: .movie, title: "沙丘：救世主", dateString: "2027-03-18", voteAverage: nil),
+        ]
     )
 }

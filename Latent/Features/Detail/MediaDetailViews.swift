@@ -24,6 +24,7 @@ struct MovieDetailView: View {
 
     @Environment(AppEnvironment.self) private var appEnv
     @State private var movie: MovieDetail?
+    @State private var collection: MovieCollection?
     @State private var errorMessage: String?
     @State private var isLoading = true
     @State private var showsReceipt = false
@@ -36,11 +37,18 @@ struct MovieDetailView: View {
             errorMessage: errorMessage,
             reload: { await load() },
             receiptAction: movie == nil ? nil : { showsReceipt = true },
-            extraContent: { _ in EmptyView() }
+            extraContent: { _ in collectionSection }
         ) { detail in
             factsSection(detail)
         }
         .task(id: movieID) { await load() }
+        .task(id: movie?.belongsToCollection?.id) {
+            guard let collectionID = movie?.belongsToCollection?.id else {
+                collection = nil
+                return
+            }
+            await loadCollection(collectionID)
+        }
         .sheet(isPresented: $showsReceipt) {
             if let movie {
                 ReceiptSheet(data: ReceiptData.build(from: movie))
@@ -48,10 +56,78 @@ struct MovieDetailView: View {
         }
     }
 
+    /// 所属系列（v1.19）：系列片才显示；只有一部作品的「系列」按普通电影处理，整段不出现。
+    @ViewBuilder
+    private var collectionSection: some View {
+        if let collection, collection.parts.count > 1 {
+            let parts = collection.orderedParts
+            VStack(alignment: .leading, spacing: UI.Spacing.s3) {
+                HStack(alignment: .top) {
+                    SectionHeader(title: "系列 · \(collection.name)")
+                    Spacer()
+                    HStack(spacing: UI.Spacing.s3) {
+                        Text("共 \(parts.count) 部")
+                            .font(.system(size: 11))
+                            .foregroundStyle(UI.Palette.textSecondary)
+                        Button("整系列加入清单") {
+                            addSeriesToWatchlist(parts)
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 12))
+                        .foregroundStyle(UI.Palette.accent)
+                        .help("把本系列还不在清单里的作品一次加入观看清单")
+                    }
+                    .padding(.top, 2)
+                }
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: UI.Spacing.gridSpacing) {
+                        ForEach(parts) { item in
+                            PosterCard(
+                                summary: item,
+                                showsHoverAction: false,
+                                onOpen: { openSummary(item) }
+                            ) {
+                                MediaContextMenu(summary: item)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func loadCollection(_ id: Int) async {
+        do {
+            collection = try await appEnv.client.collection(id: id)
+        } catch {
+            // 系列只是附加信息：拉不到就整段隐藏，不弹错误打扰主内容。
+            collection = nil
+        }
+    }
+
+    private func addSeriesToWatchlist(_ parts: [MediaSummary]) {
+        let missing = parts.filter { !appEnv.library.isInWatchlist($0) }
+        guard !missing.isEmpty else {
+            ToastCenter.shared.show("本系列已全部在清单中")
+            return
+        }
+        for item in missing {
+            appEnv.library.toggleWatchlist(item)
+        }
+        ToastCenter.shared.show("已加入 \(missing.count) 部到观看清单")
+    }
+
     private func factsSection(_ detail: MovieDetail) -> some View {
         ForEach(detail.facts, id: \.label) { row in
             FactRow(label: row.label, value: row.value)
         }
+    }
+
+    /// 系列里的作品点击后推入详情（走与相似 / 推荐 rail 相同的命令）。
+    private func openSummary(_ summary: MediaSummary) {
+        guard let destination = DetailDestination.from(summary) else { return }
+        NotificationCenter.default.post(name: AppCommandBus.pushDetail, object: destination)
     }
 
     private func load() async {

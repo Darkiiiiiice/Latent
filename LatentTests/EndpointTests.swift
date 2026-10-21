@@ -148,6 +148,15 @@ struct EndpointTests {
         #expect(URLComponents(url: config, resolvingAgainstBaseURL: false)?.queryItems == nil)
     }
 
+    @Test("系列端点：路径只带 language（v1.19）")
+    func collectionPath() {
+        let url = EndpointURLBuilder.url(for: .collection(id: 726_871), language: "zh-CN")
+        #expect(url.path == "/3/collection/726871")
+        let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        #expect(query.map(\.name) == ["language"])
+        #expect(query.first?.value == "zh-CN")
+    }
+
     @Test("同一请求产出稳定 URL（缓存键依赖）")
     func stableURL() {
         let first = EndpointURLBuilder.url(for: .movieDetail(id: 1), language: "zh-CN")

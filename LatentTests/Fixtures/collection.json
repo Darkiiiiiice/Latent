@@ -1,0 +1,45 @@
+{
+  "id": 726871,
+  "name": "沙丘合集",
+  "overview": "保罗·厄崔迪的复仇与崛起。",
+  "poster_path": "/lr11mCT85T1JanlgjMqgMhtEDby.jpg",
+  "backdrop_path": "/yYcVYQ4KkFyCbLcHDgQlEMzWF2S.jpg",
+  "parts": [
+    {
+      "id": 438631,
+      "title": "沙丘",
+      "original_title": "Dune",
+      "overview": "少年踏上沙漠星球。",
+      "poster_path": "/d5NXSklXo0qyIYkgV94XAgMIckC.jpg",
+      "backdrop_path": "/jYEW5xZkZk2WTrdbMGAPFuBqbDc.jpg",
+      "release_date": "2021-10-22",
+      "vote_average": 7.8,
+      "vote_count": 12000,
+      "genre_ids": [878, 12]
+    },
+    {
+      "id": 693134,
+      "title": "沙丘：第二部",
+      "original_title": "Dune: Part Two",
+      "overview": "保罗与弗雷曼人并肩作战。",
+      "poster_path": "/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",
+      "backdrop_path": "/xOMo8BRK7PfcJv9JCnx7s5hj0PX.jpg",
+      "release_date": "2024-02-27",
+      "vote_average": 8.1,
+      "vote_count": 4210,
+      "genre_ids": [878, 12]
+    },
+    {
+      "id": 999001,
+      "title": "沙丘：救世主",
+      "original_title": "Dune: Messiah",
+      "overview": "尚未上映。",
+      "poster_path": null,
+      "backdrop_path": null,
+      "release_date": null,
+      "vote_average": 0,
+      "vote_count": 0,
+      "genre_ids": [878]
+    }
+  ]
+}

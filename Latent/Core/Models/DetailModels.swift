@@ -29,6 +29,8 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
     let productionCountries: [ProductionCountry]?
     /// 原始国家代码（`origin_country`）。
     let originCountry: [String]?
+    /// 所属系列（v1.19）：系列片才有，普通独立电影为 nil。
+    let belongsToCollection: CollectionSummary?
 
     var mediaKind: MediaKind { .movie }
 
@@ -46,6 +48,7 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         case credits, images, similar, recommendations
         case productionCountries = "production_countries"
         case originCountry = "origin_country"
+        case belongsToCollection = "belongs_to_collection"
     }
 
     init(
@@ -57,7 +60,8 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         images: MediaImages? = nil, similar: [MediaSummary]? = nil,
         recommendations: [MediaSummary]? = nil, watchProviders: WatchProviders? = nil,
         runtime: Int? = nil, budget: Int? = nil, revenue: Int? = nil,
-        productionCountries: [ProductionCountry]? = nil, originCountry: [String]? = nil
+        productionCountries: [ProductionCountry]? = nil, originCountry: [String]? = nil,
+        belongsToCollection: CollectionSummary? = nil
     ) {
         self.id = id
         self.title = title
@@ -84,6 +88,7 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         self.revenue = revenue
         self.productionCountries = productionCountries
         self.originCountry = originCountry
+        self.belongsToCollection = belongsToCollection
     }
 
     init(from decoder: any Decoder) throws {
@@ -117,6 +122,7 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         self.revenue = (try? container.decodeIfPresent(Int.self, forKey: .revenue)) ?? nil
         self.productionCountries = (try? container.decodeIfPresent([ProductionCountry].self, forKey: .productionCountries)) ?? nil
         self.originCountry = (try? container.decodeIfPresent([String].self, forKey: .originCountry)) ?? nil
+        self.belongsToCollection = (try? container.decodeIfPresent(CollectionSummary.self, forKey: .belongsToCollection)) ?? nil
     }
 
     /// 事实栏行（电影：状态 / 上映 / 时长 / 预算 / 票房 / 语言）。
@@ -416,5 +422,89 @@ struct Network: Codable, Sendable, Identifiable, Hashable {
         self.id = try container.decode(Int.self, forKey: .id)
         self.name = ((try? container.decodeIfPresent(String.self, forKey: .name)) ?? nil) ?? "未知"
         self.logoPath = (try? container.decodeIfPresent(String.self, forKey: .logoPath)) ?? nil
+    }
+}
+
+/// 电影所属系列（`belongs_to_collection`，v1.19）：只带定位与展示所需字段。
+struct CollectionSummary: Decodable, Sendable, Identifiable, Hashable {
+    let id: Int
+    let name: String
+    let posterPath: String?
+    let backdropPath: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name
+        case posterPath = "poster_path"
+        case backdropPath = "backdrop_path"
+    }
+
+    init(id: Int, name: String, posterPath: String? = nil, backdropPath: String? = nil) {
+        self.id = id
+        self.name = name
+        self.posterPath = posterPath
+        self.backdropPath = backdropPath
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? container.decode(Int.self, forKey: .id)) ?? 0
+        self.name = ((try? container.decodeIfPresent(String.self, forKey: .name)) ?? nil) ?? "未知系列"
+        self.posterPath = (try? container.decodeIfPresent(String.self, forKey: .posterPath)) ?? nil
+        self.backdropPath = (try? container.decodeIfPresent(String.self, forKey: .backdropPath)) ?? nil
+    }
+}
+
+/// 系列详情（GET /3/collection/{id}，v1.19）。
+///
+/// `parts` 里的条目没有 `media_type`，`MediaSummary` 会按 `title` 字段推断为电影；
+/// 个别旧片可能缺 `release_date`，因此排序时把无日期的放最后（不伪造年份）。
+struct MovieCollection: Decodable, Sendable, Identifiable {
+    let id: Int
+    let name: String
+    let overview: String?
+    let posterPath: String?
+    let backdropPath: String?
+    let parts: [MediaSummary]
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, overview, parts
+        case posterPath = "poster_path"
+        case backdropPath = "backdrop_path"
+    }
+
+    init(
+        id: Int, name: String, overview: String? = nil,
+        posterPath: String? = nil, backdropPath: String? = nil, parts: [MediaSummary] = []
+    ) {
+        self.id = id
+        self.name = name
+        self.overview = overview
+        self.posterPath = posterPath
+        self.backdropPath = backdropPath
+        self.parts = parts
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? container.decode(Int.self, forKey: .id)) ?? 0
+        self.name = ((try? container.decodeIfPresent(String.self, forKey: .name)) ?? nil) ?? "未知系列"
+        self.overview = (try? container.decodeIfPresent(String.self, forKey: .overview)) ?? nil
+        self.posterPath = (try? container.decodeIfPresent(String.self, forKey: .posterPath)) ?? nil
+        self.backdropPath = (try? container.decodeIfPresent(String.self, forKey: .backdropPath)) ?? nil
+        self.parts = (try? container.decodeIfPresent([MediaSummary].self, forKey: .parts)) ?? []
+    }
+
+    /// 按上映日期正序排列的系列作品（v1.19）：TMDB 的顺序基本可用，但缺日期的条目会被排到最后。
+    var orderedParts: [MediaSummary] {
+        parts.enumerated()
+            .sorted { lhs, rhs in
+                switch (lhs.element.dateString, rhs.element.dateString) {
+                case let (l?, r?): return l == r ? lhs.offset < rhs.offset : l < r
+                case (nil, _?): return false
+                case (_?, nil): return true
+                case (nil, nil): return lhs.offset < rhs.offset
+                }
+            }
+            .map(\.element)
     }
 }

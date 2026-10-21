@@ -18,6 +18,8 @@ enum Endpoint: Sendable, Hashable {
     case tvSeason(id: Int, seasonNumber: Int)
     /// GET /3/person/{id}?append_to_response=…
     case personDetail(id: Int)
+    /// GET /3/collection/{id}（v1.19 电影系列追踪）
+    case collection(id: Int)
     /// GET /3/discover/{movie,tv}
     case discover(mediaKind: MediaKind, query: DiscoverQuery, page: Int)
     /// GET /3/genre/{movie,tv}/list
@@ -55,6 +57,8 @@ enum Endpoint: Sendable, Hashable {
             return "/3/tv/\(id)/season/\(season)"
         case .personDetail(let id):
             return "/3/person/\(id)"
+        case .collection(let id):
+            return "/3/collection/\(id)"
         case .discover(let mediaKind, _, _):
             return "/3/discover/\(mediaKind == .tv ? "tv" : "movie")"
         case .genreList(let mediaKind):
@@ -73,7 +77,7 @@ enum Endpoint: Sendable, Hashable {
             return CacheTTL.trending
         case .searchMulti:
             return CacheTTL.search
-        case .movieDetail, .tvDetail, .tvSeason, .personDetail, .discover:
+        case .movieDetail, .tvDetail, .tvSeason, .personDetail, .collection, .discover:
             return CacheTTL.detail
         }
     }
@@ -113,6 +117,8 @@ enum Endpoint: Sendable, Hashable {
                 URLQueryItem(name: "language", value: language),
                 URLQueryItem(name: "append_to_response", value: "combined_credits,images,external_ids"),
             ]
+        case .collection:
+            return [URLQueryItem(name: "language", value: language)]
         case .discover(let mediaKind, let query, let page):
             let dateField = mediaKind == .tv ? "first_air_date" : "primary_release_date"
             var items: [URLQueryItem] = [
