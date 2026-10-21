@@ -323,7 +323,10 @@ struct StatisticsView: View {
             title: "观影护照",
             caption: "已点亮 \(statistics.passport.count) 个国家和地区"
         ) {
-            Map(initialPosition: .region(Self.worldRegion), interactionModes: []) {
+            Map(
+                initialPosition: .region(Self.region(fitting: statistics.passport)),
+                interactionModes: [.pan, .zoom]
+            ) {
                 ForEach(statistics.passport) { stamp in
                     if let info = CountryDirectory.info(for: stamp.code) {
                         Annotation(stamp.name, coordinate: Self.coordinate(info)) {
@@ -414,10 +417,47 @@ struct StatisticsView: View {
         return ticks
     }
 
+    /// 没有数据时的全球视野；跨度控制在 MapKit 稳定范围内（纬度 ≤ 150、经度 ≤ 320）。
     private static var worldRegion: MKCoordinateRegion {
         MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: 18, longitude: 8),
-            span: MKCoordinateSpan(latitudeDelta: 140, longitudeDelta: 350)
+            center: CLLocationCoordinate2D(latitude: 10, longitude: 0),
+            span: MKCoordinateSpan(latitudeDelta: 150, longitudeDelta: 320)
+        )
+    }
+
+    /// 按实际标注点拟合视野：留 40% 边距，并保证最小跨度，
+    /// 避免只点亮一个国家时相机怼到街道级别、也避免跨日期变更线时算出非法跨度。
+    private static func region(
+        fitting stamps: [LibraryStatistics.CountryStamp]
+    ) -> MKCoordinateRegion {
+        let infos = stamps.compactMap { CountryDirectory.info(for: $0.code) }
+        guard let first = infos.first else { return worldRegion }
+        guard infos.count > 1 else {
+            return MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: first.latitude, longitude: first.longitude),
+                span: MKCoordinateSpan(latitudeDelta: 40, longitudeDelta: 50)
+            )
+        }
+
+        var minLatitude = first.latitude
+        var maxLatitude = first.latitude
+        var minLongitude = first.longitude
+        var maxLongitude = first.longitude
+        for info in infos.dropFirst() {
+            minLatitude = min(minLatitude, info.latitude)
+            maxLatitude = max(maxLatitude, info.latitude)
+            minLongitude = min(minLongitude, info.longitude)
+            maxLongitude = max(maxLongitude, info.longitude)
+        }
+
+        let latitudeSpan = min(max((maxLatitude - minLatitude) * 1.4, 26), 150)
+        let longitudeSpan = min(max((maxLongitude - minLongitude) * 1.4, 36), 320)
+        return MKCoordinateRegion(
+            center: CLLocationCoordinate2D(
+                latitude: (minLatitude + maxLatitude) / 2,
+                longitude: (minLongitude + maxLongitude) / 2
+            ),
+            span: MKCoordinateSpan(latitudeDelta: latitudeSpan, longitudeDelta: longitudeSpan)
         )
     }
 
