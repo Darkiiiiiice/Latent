@@ -30,6 +30,26 @@ struct LibraryStatistics: Sendable, Equatable {
         var id: Date { month }
     }
 
+    /// 预算 / 票房散点（两者都有数据才进入）。
+    struct BudgetPoint: Identifiable, Sendable, Equatable {
+        let id: String
+        let title: String
+        let budget: Int64
+        let revenue: Int64
+
+        var profit: Int64 { revenue - budget }
+        /// 票房 / 预算；预算已保证 > 0。
+        var ratio: Double { Double(revenue) / Double(budget) }
+    }
+
+    /// 观影护照：已点亮的国家 / 地区。
+    struct CountryStamp: Identifiable, Sendable, Equatable {
+        let code: String
+        let name: String
+        let count: Int
+        var id: String { code }
+    }
+
     let totalTitles: Int
     let favoriteCount: Int
     let watchlistCount: Int
@@ -45,7 +65,12 @@ struct LibraryStatistics: Sendable, Equatable {
     let monthly: [MonthPoint]
     let directors: [Slice]
     let cast: [Slice]
+    /// 国家 / 地区（中文名，按条数排序，最多 8 个）。
     let countries: [Slice]
+    /// 预算 vs 票房（按利润降序）。
+    let budgetRevenue: [BudgetPoint]
+    /// 观影护照：有坐标的国家 / 地区（按条数降序）。
+    let passport: [CountryStamp]
 
     var isEmpty: Bool { totalTitles == 0 }
 
@@ -76,7 +101,24 @@ struct LibraryStatistics: Sendable, Equatable {
         genres = Self.top(items.flatMap { $0.genreNames }, limit: 8)
         directors = Self.top(items.compactMap { $0.director }, limit: 10)
         cast = Self.top(items.flatMap(\.topCast), limit: 10)
-        countries = Self.top(items.flatMap(\.countries), limit: 8)
+        countries = Self.top(
+            items.flatMap(\.countries).map(CountryDirectory.name(for:)),
+            limit: 8
+        )
+
+        budgetRevenue = items.compactMap { item in
+            guard let budget = item.budget, budget > 0,
+                  let revenue = item.revenue, revenue > 0 else { return nil }
+            return BudgetPoint(
+                id: item.id,
+                title: item.title,
+                budget: budget,
+                revenue: revenue
+            )
+        }
+        .sorted { ($0.profit, $0.title) > ($1.profit, $1.title) }
+
+        passport = Self.passport(from: items)
 
         decades = Self.histogram(
             items.compactMap(\.year).map { $0 / 10 * 10 },
@@ -127,6 +169,22 @@ struct LibraryStatistics: Sendable, Equatable {
         var counts: [Int: Int] = [:]
         for value in values { counts[value, default: 0] += 1 }
         return counts.map { make($0.key, $0.value) }.sorted(by: sort)
+    }
+
+    /// 按国家代码聚合，只保留有坐标的；未知代码不进入地图（也不计入点亮数）。
+    private static func passport(from items: [LibrarySnapshot]) -> [CountryStamp] {
+        var counts: [String: Int] = [:]
+        for code in items.flatMap(\.countries) {
+            let normalized = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !normalized.isEmpty else { continue }
+            counts[normalized, default: 0] += 1
+        }
+        return counts
+            .compactMap { code, count in
+                guard let info = CountryDirectory.info(for: code) else { return nil }
+                return CountryStamp(code: code, name: info.name, count: count)
+            }
+            .sorted { ($0.count, $1.name) > ($1.count, $0.name) }
     }
 
     /// 最近 12 个月（含当月）的入库条数；空缺月份补 0，曲线连续。

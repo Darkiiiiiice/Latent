@@ -28,6 +28,8 @@ struct LibraryStatisticsTests {
         director: String? = nil,
         cast: [String] = [],
         countries: [String] = [],
+        budget: Int64? = nil,
+        revenue: Int64? = nil,
         enriched: Bool = true
     ) -> LibrarySnapshot {
         LibrarySnapshot(
@@ -44,8 +46,8 @@ struct LibraryStatisticsTests {
             director: director,
             topCast: cast,
             countries: countries,
-            budget: nil,
-            revenue: nil,
+            budget: budget,
+            revenue: revenue,
             detailFetchedAt: enriched ? addedAt : nil
         )
     }
@@ -162,6 +164,54 @@ struct LibraryStatisticsTests {
         // 同数量按名称升序：导演00 在导演01 之前。
         #expect(stats.directors[1].name == "导演00")
         #expect(stats.directors[2].name == "导演01")
+    }
+
+    @Test("预算与票房：两者都有正值才进入，按利润降序")
+    func budgetRevenue() {
+        let stats = LibraryStatistics(
+            favorites: [
+                snapshot(id: 1, title: "小成本", budget: 10_000_000, revenue: 190_000_000),
+                snapshot(id: 2, title: "大片", budget: 200_000_000, revenue: 300_000_000),
+                snapshot(id: 3, title: "缺票房", budget: 50_000_000),
+                snapshot(id: 4, title: "零预算", budget: 0, revenue: 80_000_000)
+            ],
+            watchlist: [],
+            now: date(2026, 10, 15),
+            calendar: calendar
+        )
+        #expect(stats.budgetRevenue.map(\.title) == ["小成本", "大片"])
+        #expect(stats.budgetRevenue.first?.profit == 180_000_000)
+        #expect(stats.budgetRevenue.first?.ratio == 19)
+    }
+
+    @Test("观影护照按代码聚合、转中文名、跳过未知地区")
+    func passportAggregation() {
+        let stats = LibraryStatistics(
+            favorites: [
+                snapshot(id: 1, countries: ["US", "CN"]),
+                snapshot(id: 2, countries: ["us"]),
+                snapshot(id: 3, countries: ["ZZ"]),
+                snapshot(id: 4, countries: ["JP"])
+            ],
+            watchlist: [],
+            now: date(2026, 10, 15),
+            calendar: calendar
+        )
+        #expect(stats.passport.map(\.name) == ["美国", "中国", "日本"])
+        #expect(stats.passport.map(\.count) == [2, 1, 1])
+        // 未收录的地区不进入地图，但仍以代码形式出现在国家榜单里。
+        #expect(stats.countries.first { $0.name == "ZZ" }?.count == 1)
+    }
+
+    @Test("榜单里的国家显示中文名")
+    func countryDisplayName() {
+        let stats = LibraryStatistics(
+            favorites: [snapshot(id: 1, countries: ["US"]), snapshot(id: 2, countries: ["CN"])],
+            watchlist: [],
+            now: date(2026, 10, 15),
+            calendar: calendar
+        )
+        #expect(stats.countries.map(\.name) == ["中国", "美国"])
     }
 
     @Test("空片库标记为空；空白名字不进入榜单")

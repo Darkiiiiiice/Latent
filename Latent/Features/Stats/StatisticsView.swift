@@ -1,4 +1,5 @@
 import Charts
+import MapKit
 import SwiftUI
 
 /// 片库统计页（设计文档第 14.3 节）。
@@ -43,6 +44,12 @@ struct StatisticsView: View {
                         }
                         if statistics.monthly.contains(where: { $0.count > 0 }) {
                             monthlyCard
+                        }
+                        if !statistics.budgetRevenue.isEmpty {
+                            budgetCard
+                        }
+                        if !statistics.passport.isEmpty {
+                            passportCard
                         }
                         if !statistics.genres.isEmpty {
                             rankingCard(
@@ -235,6 +242,123 @@ struct StatisticsView: View {
             .frame(height: 150)
             .accessibilityLabel("入库趋势")
         }
+    }
+
+    /// 预算 vs 票房：点越靠右下越像「以小博大」，虚线为回本线。
+    private var budgetCard: some View {
+        let points = statistics.budgetRevenue
+        let maxValue = points.map { max($0.budget, $0.revenue) }.max() ?? 1
+        let best = points.first
+
+        return ChartCard(
+            title: "预算 vs 票房",
+            caption: "美元；虚线为回本线，右下角最赚"
+        ) {
+            Chart {
+                ForEach(points) { point in
+                    PointMark(
+                        x: .value("预算", Double(point.budget)),
+                        y: .value("票房", Double(point.revenue))
+                    )
+                    .foregroundStyle(UI.Palette.accent.opacity(0.75))
+                    .symbolSize(48)
+                }
+
+                LineMark(
+                    x: .value("预算", 0),
+                    y: .value("票房", 0)
+                )
+                .foregroundStyle(UI.Palette.textSecondary.opacity(0.4))
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                LineMark(
+                    x: .value("预算", Double(maxValue)),
+                    y: .value("票房", Double(maxValue))
+                )
+                .foregroundStyle(UI.Palette.textSecondary.opacity(0.4))
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+            }
+            .chartXScale(domain: 0...Double(maxValue))
+            .chartYScale(domain: 0...Double(maxValue))
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 3)) { value in
+                    AxisGridLine().foregroundStyle(UI.Palette.border)
+                    AxisValueLabel {
+                        Text(Self.axisMoney(value.as(Double.self)))
+                            .font(.system(size: 10))
+                            .foregroundStyle(UI.Palette.textSecondary)
+                    }
+                }
+            }
+            .chartYAxis {
+                AxisMarks(values: .automatic(desiredCount: 3)) { value in
+                    AxisGridLine().foregroundStyle(UI.Palette.border)
+                    AxisValueLabel {
+                        Text(Self.axisMoney(value.as(Double.self)))
+                            .font(.system(size: 10))
+                            .foregroundStyle(UI.Palette.textSecondary)
+                    }
+                }
+            }
+            .frame(height: 190)
+            .accessibilityLabel("预算与票房散点图，共 \(points.count) 部")
+
+            if let best, best.budget > 0 {
+                Text("回本最高：\(best.title) · \(String(format: "%.1f", best.ratio))×")
+                    .font(.system(size: 11))
+                    .foregroundStyle(UI.Palette.textSecondary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    /// 观影护照：把有作品的制片国家在世界地图上点亮。
+    private var passportCard: some View {
+        ChartCard(
+            title: "观影护照",
+            caption: "已点亮 \(statistics.passport.count) 个国家和地区"
+        ) {
+            Map(initialPosition: .region(Self.worldRegion), interactionModes: []) {
+                ForEach(statistics.passport) { stamp in
+                    if let info = CountryDirectory.info(for: stamp.code) {
+                        Annotation(stamp.name, coordinate: Self.coordinate(info)) {
+                            Text("\(stamp.count)")
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(UI.Palette.accent.opacity(0.9), in: Capsule())
+                        }
+                    }
+                }
+            }
+            .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
+            .frame(height: 200)
+            .clipShape(RoundedRectangle(cornerRadius: UI.Radius.button, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: UI.Radius.button, style: .continuous)
+                    .strokeBorder(UI.Palette.border, lineWidth: 1)
+            }
+            .accessibilityLabel("观影护照地图，已点亮 \(statistics.passport.count) 个国家和地区")
+        }
+    }
+
+    // MARK: - 局部工具
+
+    private static var worldRegion: MKCoordinateRegion {
+        MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: 18, longitude: 8),
+            span: MKCoordinateSpan(latitudeDelta: 140, longitudeDelta: 350)
+        )
+    }
+
+    private static func coordinate(_ info: CountryDirectory.Info) -> CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: info.latitude, longitude: info.longitude)
+    }
+
+    /// 坐标轴金额：$200M 这种短写法；无值时留空。
+    private static func axisMoney(_ amount: Double?) -> String {
+        guard let amount, amount > 0 else { return "" }
+        return Formatters.money(Int(amount)) ?? ""
     }
 
     private func rankingCard(
