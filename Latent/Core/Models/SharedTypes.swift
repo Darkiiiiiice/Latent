@@ -28,6 +28,9 @@ protocol MediaDetail: Sendable {
     /// 事实栏行（各详情类型自带）。
     var facts: [(label: String, value: String)] { get }
 
+    /// 写入片库时一并保存的富化字段（统计页用；设计文档第 6 / 14.3 节）。
+    var libraryDetails: LibraryDetails { get }
+
     var year: Int? { get }
     var ratingText: String? { get }
 }
@@ -54,6 +57,28 @@ struct Genre: Codable, Sendable, Identifiable, Hashable {
     }
 
     private enum CodingKeys: String, CodingKey { case id, name }
+}
+
+/// 制片国家 / 地区（详情里的 `production_countries`，含名称便于展示）。
+struct ProductionCountry: Codable, Sendable, Hashable {
+    let iso3166_1: String
+    let name: String
+
+    init(iso3166_1: String, name: String = "") {
+        self.iso3166_1 = iso3166_1
+        self.name = name
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.iso3166_1 = ((try? container.decodeIfPresent(String.self, forKey: .iso3166_1)) ?? nil) ?? ""
+        self.name = ((try? container.decodeIfPresent(String.self, forKey: .name)) ?? nil) ?? ""
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name
+        case iso3166_1 = "iso_3166_1"
+    }
 }
 
 /// 外链标识。

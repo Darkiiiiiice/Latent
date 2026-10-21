@@ -7,7 +7,12 @@ import OSLog
 /// 按具体模型类型分派（`#Predicate` 需要访问具体类型的属性，协议属性不可用）。
 enum LibraryStoreWriter {
     @discardableResult
-    static func upsertFavorite(_ summary: MediaSummary, into context: ModelContext, addedAt: Date = Date()) -> FavoriteItem {
+    static func upsertFavorite(
+        _ summary: MediaSummary,
+        into context: ModelContext,
+        addedAt: Date = Date(),
+        details: LibraryDetails? = nil
+    ) -> FavoriteItem {
         let kind = summary.mediaKind.rawValue
         let id = summary.id
         let descriptor = FetchDescriptor<FavoriteItem>(
@@ -25,15 +30,21 @@ enum LibraryStoreWriter {
             first.posterPath = summary.posterPath
             first.voteAverage = summary.voteAverage
             first.addedAt = addedAt
+            details?.apply(to: first)
             return first
         }
-        let item = FavoriteItem(summary: summary, addedAt: addedAt)
+        let item = FavoriteItem(summary: summary, addedAt: addedAt, details: details)
         context.insert(item)
         return item
     }
 
     @discardableResult
-    static func upsertWatchlist(_ summary: MediaSummary, into context: ModelContext, addedAt: Date = Date()) -> WatchlistItem {
+    static func upsertWatchlist(
+        _ summary: MediaSummary,
+        into context: ModelContext,
+        addedAt: Date = Date(),
+        details: LibraryDetails? = nil
+    ) -> WatchlistItem {
         let kind = summary.mediaKind.rawValue
         let id = summary.id
         let descriptor = FetchDescriptor<WatchlistItem>(
@@ -51,9 +62,10 @@ enum LibraryStoreWriter {
             first.posterPath = summary.posterPath
             first.voteAverage = summary.voteAverage
             first.addedAt = addedAt
+            details?.apply(to: first)
             return first
         }
-        let item = WatchlistItem(summary: summary, addedAt: addedAt)
+        let item = WatchlistItem(summary: summary, addedAt: addedAt, details: details)
         context.insert(item)
         return item
     }
@@ -96,7 +108,20 @@ struct LibrarySnapshot: Sendable, Identifiable, Hashable {
     let voteAverage: Double?
     let addedAt: Date
 
+    // MARK: 详情富化（V2；旧数据为 nil，回填后补齐）
+    var genreNames: [String] = []
+    var runtime: Int? = nil
+    var director: String? = nil
+    var topCast: [String] = []
+    var countries: [String] = []
+    var budget: Int64? = nil
+    var revenue: Int64? = nil
+    var detailFetchedAt: Date? = nil
+
     var id: String { "\(mediaKind.rawValue)-\(tmdbID)" }
+
+    /// 详情字段是否已回填（统计页据此提示待补数量）。
+    var isEnriched: Bool { detailFetchedAt != nil }
 
     var asSummary: MediaSummary {
         MediaSummary(
@@ -119,7 +144,10 @@ extension FavoriteItem: LibraryRecord {
     var snapshot: LibrarySnapshot {
         LibrarySnapshot(mediaKind: mediaKind, tmdbID: tmdbID, title: title,
                         originalTitle: originalTitle, year: year,
-                        posterPath: posterPath, voteAverage: voteAverage, addedAt: addedAt)
+                        posterPath: posterPath, voteAverage: voteAverage, addedAt: addedAt,
+                        genreNames: genreNames ?? [], runtime: runtime, director: director,
+                        topCast: topCast ?? [], countries: countries ?? [],
+                        budget: budget, revenue: revenue, detailFetchedAt: detailFetchedAt)
     }
     var lastViewedAt: Date { addedAt }
 }
@@ -128,7 +156,10 @@ extension WatchlistItem: LibraryRecord {
     var snapshot: LibrarySnapshot {
         LibrarySnapshot(mediaKind: mediaKind, tmdbID: tmdbID, title: title,
                         originalTitle: originalTitle, year: year,
-                        posterPath: posterPath, voteAverage: voteAverage, addedAt: addedAt)
+                        posterPath: posterPath, voteAverage: voteAverage, addedAt: addedAt,
+                        genreNames: genreNames ?? [], runtime: runtime, director: director,
+                        topCast: topCast ?? [], countries: countries ?? [],
+                        budget: budget, revenue: revenue, detailFetchedAt: detailFetchedAt)
     }
     var lastViewedAt: Date { addedAt }
 }
@@ -137,6 +168,9 @@ extension HistoryEntry: LibraryRecord {
     var snapshot: LibrarySnapshot {
         LibrarySnapshot(mediaKind: mediaKind, tmdbID: tmdbID, title: title,
                         originalTitle: originalTitle, year: year,
-                        posterPath: posterPath, voteAverage: voteAverage, addedAt: lastViewedAt)
+                        posterPath: posterPath, voteAverage: voteAverage, addedAt: lastViewedAt,
+                        genreNames: genreNames ?? [], runtime: runtime, director: director,
+                        topCast: topCast ?? [], countries: countries ?? [],
+                        budget: budget, revenue: revenue, detailFetchedAt: detailFetchedAt)
     }
 }

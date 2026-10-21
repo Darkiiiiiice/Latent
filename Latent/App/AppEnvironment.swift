@@ -21,6 +21,7 @@ final class AppEnvironment {
     var connectionState: ConnectionState = .unknown
 
     @ObservationIgnored private var spotlightTask: Task<Void, Never>?
+    @ObservationIgnored private var backfillTask: Task<Void, Never>?
 
     enum ConnectionState: Sendable, Equatable {
         case unknown
@@ -79,6 +80,38 @@ final class AppEnvironment {
             history: history.items,
             language: settings.language
         )
+    }
+
+    /// 后台补齐片库条目缺失的详情字段（v1.9）。
+    ///
+    /// 只在应用运行时进行（沙盒没有后台定时执行能力）；一次最多处理 40 条，
+    /// 断网或 Token 未配置时立即停止，下次启动继续，不会把条目误标为已富化。
+    func enrichLibraryInBackground(limit: Int = 40) {
+        guard backfillTask == nil, library.pendingEnrichmentCount > 0 else { return }
+        let client = self.client
+        backfillTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.library.backfillDetails(limit: limit) { kind, id in
+                do {
+                    switch kind {
+                    case .movie:
+                        let detail = try await client.movieDetail(id: id)
+                        return .found(LibraryDetails(movie: detail))
+                    case .tv:
+                        let detail = try await client.tvDetail(id: id)
+                        return .found(LibraryDetails(tv: detail))
+                    default:
+                        return .gone
+                    }
+                } catch let error as APIError {
+                    if case .notFound = error { return .gone }
+                    return .failed
+                } catch {
+                    return .failed
+                }
+            }
+            self.backfillTask = nil
+        }
     }
 
     /// 重建 Spotlight 索引。`immediately` 用于启动；库变更时做 350ms 防抖。

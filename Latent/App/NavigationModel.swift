@@ -7,6 +7,7 @@ enum SidebarScope: String, CaseIterable, Identifiable, Sendable {
     case favorites
     case watchlist
     case history
+    case stats
 
     var id: String { rawValue }
 
@@ -17,6 +18,7 @@ enum SidebarScope: String, CaseIterable, Identifiable, Sendable {
         case .favorites: return "收藏"
         case .watchlist: return "观看清单"
         case .history: return "历史"
+        case .stats: return "统计"
         }
     }
 
@@ -27,10 +29,11 @@ enum SidebarScope: String, CaseIterable, Identifiable, Sendable {
         case .favorites: return "star"
         case .watchlist: return "bookmark"
         case .history: return "clock"
+        case .stats: return "chart.bar"
         }
     }
 
-    /// 快捷键（Cmd+1…5，设计文档第 8.7 节）。
+    /// 快捷键（Cmd+1…6，设计文档第 8.7 节）。
     var shortcutIndex: Int {
         switch self {
         case .trending: return 1
@@ -38,6 +41,7 @@ enum SidebarScope: String, CaseIterable, Identifiable, Sendable {
         case .favorites: return 3
         case .watchlist: return 4
         case .history: return 5
+        case .stats: return 6
         }
     }
 }

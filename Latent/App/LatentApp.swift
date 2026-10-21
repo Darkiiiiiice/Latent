@@ -57,6 +57,7 @@ struct RootView: View {
                         // 冷启动不等待网络：先渲染骨架，连接验证异步进行
                         appEnv.refreshSpotlightIndex(immediately: true)
                         await appEnv.checkConnection()
+                        appEnv.enrichLibraryInBackground()
                     }
             }
         }

@@ -25,6 +25,10 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
     let runtime: Int?
     let budget: Int?
     let revenue: Int?
+    /// 制片国家（详情基础响应自带，无需 append）。
+    let productionCountries: [ProductionCountry]?
+    /// 原始国家代码（`origin_country`）。
+    let originCountry: [String]?
 
     var mediaKind: MediaKind { .movie }
 
@@ -40,6 +44,8 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         case externalIDs = "external_ids"
         case watchProviders = "watch/providers"
         case credits, images, similar, recommendations
+        case productionCountries = "production_countries"
+        case originCountry = "origin_country"
     }
 
     init(
@@ -50,7 +56,8 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         homepage: URL? = nil, externalIDs: ExternalIDs? = nil, credits: Credits? = nil,
         images: MediaImages? = nil, similar: [MediaSummary]? = nil,
         recommendations: [MediaSummary]? = nil, watchProviders: WatchProviders? = nil,
-        runtime: Int? = nil, budget: Int? = nil, revenue: Int? = nil
+        runtime: Int? = nil, budget: Int? = nil, revenue: Int? = nil,
+        productionCountries: [ProductionCountry]? = nil, originCountry: [String]? = nil
     ) {
         self.id = id
         self.title = title
@@ -75,6 +82,8 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         self.runtime = runtime
         self.budget = budget
         self.revenue = revenue
+        self.productionCountries = productionCountries
+        self.originCountry = originCountry
     }
 
     init(from decoder: any Decoder) throws {
@@ -106,6 +115,8 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         self.runtime = (try? container.decodeIfPresent(Int.self, forKey: .runtime)) ?? nil
         self.budget = (try? container.decodeIfPresent(Int.self, forKey: .budget)) ?? nil
         self.revenue = (try? container.decodeIfPresent(Int.self, forKey: .revenue)) ?? nil
+        self.productionCountries = (try? container.decodeIfPresent([ProductionCountry].self, forKey: .productionCountries)) ?? nil
+        self.originCountry = (try? container.decodeIfPresent([String].self, forKey: .originCountry)) ?? nil
     }
 
     /// 事实栏行（电影：状态 / 上映 / 时长 / 预算 / 票房 / 语言）。
@@ -119,6 +130,8 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         if let originalLanguage { rows.append((label: "语言", value: originalLanguage)) }
         return rows
     }
+
+    var libraryDetails: LibraryDetails { LibraryDetails(movie: self) }
 }
 
 /// 剧集详情（GET /3/tv/{id}，append_to_response=credits,images,similar,recommendations,external_ids,content_ratings,watch/providers）。
@@ -151,6 +164,9 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
     let networks: [Network]?
     /// 主创（TMDB `created_by`；与分集导演是两回事）。
     let createdBy: [Creator]?
+    /// 出品国家 / 地区。
+    let productionCountries: [ProductionCountry]?
+    let originCountry: [String]?
 
     var mediaKind: MediaKind { .tv }
     var title: String { name }
@@ -174,6 +190,8 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
         case episodeRunTime = "episode_run_time"
         case lastAirDate = "last_air_date"
         case createdBy = "created_by"
+        case productionCountries = "production_countries"
+        case originCountry = "origin_country"
     }
 
     init(
@@ -187,7 +205,8 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
         numberOfSeasons: Int? = nil,
         numberOfEpisodes: Int? = nil, seasons: [Season]? = nil,
         episodeRunTime: [Int]? = nil, lastAirDate: String? = nil,
-        networks: [Network]? = nil, createdBy: [Creator]? = nil
+        networks: [Network]? = nil, createdBy: [Creator]? = nil,
+        productionCountries: [ProductionCountry]? = nil, originCountry: [String]? = nil
     ) {
         self.id = id
         self.name = name
@@ -216,6 +235,8 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
         self.lastAirDate = lastAirDate
         self.networks = networks
         self.createdBy = createdBy
+        self.productionCountries = productionCountries
+        self.originCountry = originCountry
     }
 
     init(from decoder: any Decoder) throws {
@@ -251,6 +272,8 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
         self.lastAirDate = (try? container.decodeIfPresent(String.self, forKey: .lastAirDate)) ?? nil
         self.networks = (try? container.decodeIfPresent([Network].self, forKey: .networks)) ?? nil
         self.createdBy = (try? container.decodeIfPresent([Creator].self, forKey: .createdBy)) ?? nil
+        self.productionCountries = (try? container.decodeIfPresent([ProductionCountry].self, forKey: .productionCountries)) ?? nil
+        self.originCountry = (try? container.decodeIfPresent([String].self, forKey: .originCountry)) ?? nil
     }
 
     /// 事实栏行（剧集：状态 / 首播 / 季数 / 集数 / 最近播出 / 语言）。
@@ -264,6 +287,8 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
         if let originalLanguage { rows.append((label: "语言", value: originalLanguage)) }
         return rows
     }
+
+    var libraryDetails: LibraryDetails { LibraryDetails(tv: self) }
 }
 
 /// 剧集某一季。

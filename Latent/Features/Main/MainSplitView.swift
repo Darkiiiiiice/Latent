@@ -82,6 +82,8 @@ struct MainSplitView: View {
             LibraryView(kind: .watchlist, gridMode: gridMode, open: open)
         case .history:
             HistoryView(open: open)
+        case .stats:
+            StatisticsView()
         }
     }
 
@@ -190,6 +192,7 @@ struct SidebarView: View {
                     row(.favorites)
                     row(.watchlist)
                     row(.history)
+                    row(.stats)
                 }
             }
             .listStyle(.sidebar)

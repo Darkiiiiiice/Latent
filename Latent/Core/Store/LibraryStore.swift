@@ -29,6 +29,16 @@ struct LibraryChange: Identifiable, Sendable, Equatable {
     }
 }
 
+/// 详情回填的单条结果。
+enum DetailFetchResult: Sendable {
+    /// 取到详情。
+    case found(LibraryDetails)
+    /// 作品已不存在（404）：标记为已尝试，不再反复请求。
+    case gone
+    /// 网络 / 服务端错误：保留待补状态，下次启动再试。
+    case failed
+}
+
 /// 收藏与观看清单（SwiftData 本地持久化）。
 ///
 /// 去重键 = `(mediaType, tmdbID)`；同键重复写入只保留一条（设计文档第 6 节）。
@@ -72,12 +82,12 @@ final class LibraryStore {
     }
 
     @discardableResult
-    func toggleFavorite(_ summary: MediaSummary) -> Bool {
+    func toggleFavorite(_ summary: MediaSummary, details: LibraryDetails? = nil) -> Bool {
         if favoriteIDs.contains(Self.key(for: summary)) {
             _ = removeFavorite(summary)
             return false
         }
-        LibraryStoreWriter.upsertFavorite(summary, into: context)
+        LibraryStoreWriter.upsertFavorite(summary, into: context, details: details)
         saveAndReload()
         return true
     }
@@ -100,12 +110,12 @@ final class LibraryStore {
     }
 
     @discardableResult
-    func toggleWatchlist(_ summary: MediaSummary) -> Bool {
+    func toggleWatchlist(_ summary: MediaSummary, details: LibraryDetails? = nil) -> Bool {
         if watchlistIDs.contains(Self.key(for: summary)) {
             _ = removeFromWatchlist(summary)
             return false
         }
-        LibraryStoreWriter.upsertWatchlist(summary, into: context)
+        LibraryStoreWriter.upsertWatchlist(summary, into: context, details: details)
         saveAndReload()
         return true
     }
@@ -222,17 +232,83 @@ final class LibraryStore {
     /// 语言切换或详情回访后，用最新数据刷新库内展示字段。
     ///
     /// 保留原 `addedAt`：刷新展示字段不应改变「添加时间」排序（v1.7 修正）。
-    func refresh(_ summary: MediaSummary) {
+    func refresh(_ summary: MediaSummary, details: LibraryDetails? = nil) {
         let key = Self.key(for: summary)
         if favoriteIDs.contains(key) {
             let addedAt = favoriteItems.first { $0.id == key }?.addedAt ?? Date()
-            LibraryStoreWriter.upsertFavorite(summary, into: context, addedAt: addedAt)
+            LibraryStoreWriter.upsertFavorite(summary, into: context, addedAt: addedAt, details: details)
         }
         if watchlistIDs.contains(key) {
             let addedAt = watchlistItems.first { $0.id == key }?.addedAt ?? Date()
-            LibraryStoreWriter.upsertWatchlist(summary, into: context, addedAt: addedAt)
+            LibraryStoreWriter.upsertWatchlist(summary, into: context, addedAt: addedAt, details: details)
         }
         saveAndReload()
+    }
+
+    // MARK: - 回填（v1.9）
+
+    /// 尚未富化的收藏 / 清单条数。
+    var pendingEnrichmentCount: Int {
+        (favoriteItems + watchlistItems).filter { !$0.isEnriched }.count
+    }
+
+    /// 逐条补齐详情富化字段。
+    ///
+    /// 回填受沙盒限制只能在应用运行时进行，`limit` 控制单次批量；
+    /// 遇到网络 / 服务端错误立即停止，未处理的条目保持待补状态，下次启动再试。
+    /// 返回本次实际处理（成功或确认已下线）的条数。
+    @discardableResult
+    func backfillDetails(
+        limit: Int = 40,
+        fetch: @escaping @Sendable (MediaKind, Int) async -> DetailFetchResult
+    ) async -> Int {
+        let pending = Array((favoriteItems + watchlistItems)
+            .filter { !$0.isEnriched }
+            .prefix(limit))
+        guard !pending.isEmpty else { return 0 }
+
+        var processed = 0
+        for snapshot in pending {
+            if Task.isCancelled { break }
+            switch await fetch(snapshot.mediaKind, snapshot.tmdbID) {
+            case .found(let details):
+                applyBackfill(snapshot, details: details)
+                processed += 1
+            case .gone:
+                applyBackfill(snapshot, details: nil)
+                processed += 1
+            case .failed:
+                saveAndReload()
+                return processed
+            }
+        }
+        saveAndReload()
+        return processed
+    }
+
+    private func applyBackfill(_ snapshot: LibrarySnapshot, details: LibraryDetails?) {
+        let kind = snapshot.mediaKind.rawValue
+        let id = snapshot.tmdbID
+        let favorites = (try? context.fetch(FetchDescriptor<FavoriteItem>(
+            predicate: #Predicate { $0.mediaType == kind && $0.tmdbID == id }
+        ))) ?? []
+        let watchlist = (try? context.fetch(FetchDescriptor<WatchlistItem>(
+            predicate: #Predicate { $0.mediaType == kind && $0.tmdbID == id }
+        ))) ?? []
+
+        var records: [any LibraryModel] = []
+        records.append(contentsOf: favorites)
+        records.append(contentsOf: watchlist)
+
+        let fetchedAt = Date()
+        for record in records {
+            if let details {
+                details.apply(to: record, fetchedAt: fetchedAt)
+            } else {
+                // 作品已从 TMDB 下线：记为已尝试，不再反复请求。
+                record.detailFetchedAt = fetchedAt
+            }
+        }
     }
 
     // MARK: - 内部
@@ -274,11 +350,20 @@ final class LibraryStore {
         into kind: LibraryKind,
         addedAt: Date = Date()
     ) {
+        // 移动 / 撤销时空值快照不应把条目误标为「已富化」。
+        let details = snapshot.isEnriched
+            ? LibraryDetails(
+                genreNames: snapshot.genreNames, runtime: snapshot.runtime,
+                director: snapshot.director, topCast: snapshot.topCast,
+                countries: snapshot.countries, budget: snapshot.budget,
+                revenue: snapshot.revenue
+            )
+            : nil
         switch kind {
         case .favorites:
-            LibraryStoreWriter.upsertFavorite(snapshot.asSummary, into: context, addedAt: addedAt)
+            LibraryStoreWriter.upsertFavorite(snapshot.asSummary, into: context, addedAt: addedAt, details: details)
         case .watchlist:
-            LibraryStoreWriter.upsertWatchlist(snapshot.asSummary, into: context, addedAt: addedAt)
+            LibraryStoreWriter.upsertWatchlist(snapshot.asSummary, into: context, addedAt: addedAt, details: details)
         }
     }
 

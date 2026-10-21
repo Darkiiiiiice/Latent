@@ -62,7 +62,7 @@ struct MovieDetailView: View {
             movie = detail
             let summary = (fallback ?? MediaSummary(id: movieID, mediaKind: .movie, title: detail.title)).resolved(from: detail)
             appEnv.recordView(summary)
-            appEnv.library.refresh(summary)
+            appEnv.library.refresh(summary, details: detail.libraryDetails)
         } catch let error as APIError {
             errorMessage = error.errorDescription
         } catch {
@@ -173,7 +173,7 @@ struct TVShowDetailView: View {
             show = detail
             let summary = (fallback ?? MediaSummary(id: showID, mediaKind: .tv, title: detail.title)).resolved(from: detail)
             appEnv.recordView(summary)
-            appEnv.library.refresh(summary)
+            appEnv.library.refresh(summary, details: detail.libraryDetails)
             if selectedSeason == nil, let first = detail.seasons?.first(where: { $0.seasonNumber > 0 })?.seasonNumber
                 ?? detail.seasons?.first?.seasonNumber {
                 selectedSeason = first
@@ -341,7 +341,7 @@ struct MediaDetailScaffold<Detail: MediaDetail, Facts: View, Extra: View>: View 
             if let summary, summary.mediaKind.isLibraryEligible {
                 ToolbarItemGroup(placement: .primaryAction) {
                     Button {
-                        let added = appEnv.library.toggleFavorite(summary)
+                        let added = appEnv.library.toggleFavorite(summary, details: detail?.libraryDetails)
                         ToastCenter.shared.show(added ? "已加入收藏" : "已移出收藏")
                     } label: {
                         Label(
@@ -353,7 +353,7 @@ struct MediaDetailScaffold<Detail: MediaDetail, Facts: View, Extra: View>: View 
                     .keyboardShortcut("d", modifiers: .command)
 
                     Button {
-                        let added = appEnv.library.toggleWatchlist(summary)
+                        let added = appEnv.library.toggleWatchlist(summary, details: detail?.libraryDetails)
                         ToastCenter.shared.show(added ? "已加入观看清单" : "已移出观看清单")
                     } label: {
                         Label(
