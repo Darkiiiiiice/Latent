@@ -36,6 +36,18 @@ enum Formatters {
         return String(format: "%.1f", value)
     }
 
+    /// 评分人数：1_234 → 「1,234」；12_300 → 「1.2 万」；> 1 亿用「亿」。
+    static func voteCount(_ count: Int) -> String {
+        guard count > 0 else { return "0" }
+        if count >= 100_000_000 {
+            return trimUpTo1Decimal(Double(count) / 100_000_000) + " 亿"
+        }
+        if count >= 10_000 {
+            return trimUpTo1Decimal(Double(count) / 10_000) + " 万"
+        }
+        return count.formatted(.number.grouping(.automatic))
+    }
+
     /// 年份：1868（TMDB 对未知日期返回 1？不——TMDB 用空字符串；此处只兜底异常值）。
     static func year(from dateString: String?) -> Int? {
         guard let dateString, dateString.count >= 4 else { return nil }

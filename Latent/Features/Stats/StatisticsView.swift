@@ -19,6 +19,11 @@ struct StatisticsView: View {
         )
     }
 
+    /// 收藏 + 清单的原始快照（色板墙自己去做去重与筛选）。
+    private var libraryItems: [LibrarySnapshot] {
+        appEnv.library.favoriteItems + appEnv.library.watchlistItems
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: UI.Spacing.s6) {
@@ -54,6 +59,12 @@ struct StatisticsView: View {
                         }
                         if !statistics.budgetRevenue.isEmpty {
                             budgetCard
+                        }
+                        if !statistics.obscure.isEmpty {
+                            obscurityCard
+                        }
+                        if libraryItems.contains(where: { $0.posterPath != nil }) {
+                            PosterPaletteWall(items: libraryItems)
                         }
                         if !statistics.passport.isEmpty {
                             passportCard
@@ -219,6 +230,57 @@ struct StatisticsView: View {
         lastTastePickID = pick.id
         guard let destination = DetailDestination.from(pick.asSummary) else { return }
         NotificationCenter.default.post(name: AppCommandBus.pushDetail, object: destination)
+    }
+
+    /// 冷门指数：评分人数越少分数越高，100 为极冷门。
+    private var obscurityCard: some View {
+        let points = statistics.obscure
+        return ChartCard(title: "冷门指数", caption: "评分人数越少越冷，满分 100") {
+            VStack(spacing: 0) {
+                ForEach(Array(points.enumerated()), id: \.element.id) { index, point in
+                    HStack(spacing: UI.Spacing.s3) {
+                        NumericText(text: "\(index + 1)", size: 11, color: UI.Palette.textSecondary)
+                            .frame(width: 16, alignment: .leading)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(point.title)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(UI.Palette.textPrimary)
+                                .lineLimit(1)
+                            HStack(spacing: 4) {
+                                if let year = point.year {
+                                    NumericText(text: "\(year)", size: 10)
+                                }
+                                Text("\(point.votesText) 人评分")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(UI.Palette.textSecondary)
+                            }
+                        }
+
+                        Spacer(minLength: UI.Spacing.s2)
+
+                        Capsule()
+                            .fill(UI.Palette.border)
+                            .frame(width: 56, height: 4)
+                            .overlay(alignment: .leading) {
+                                Capsule()
+                                    .fill(UI.Palette.accent)
+                                    .frame(width: 56 * CGFloat(point.score) / 100, height: 4)
+                            }
+
+                        NumericText(text: "\(point.score)", size: 12)
+                            .frame(width: 24, alignment: .trailing)
+                    }
+                    .padding(.vertical, 5)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(point.title)，冷门指数 \(point.score)")
+
+                    if index < points.count - 1 {
+                        Divider().overlay(UI.Palette.border)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - 图表卡片
@@ -724,7 +786,7 @@ private struct SummaryTile: View {
     }
 }
 
-private struct ChartCard<Content: View>: View {
+struct ChartCard<Content: View>: View {
     let title: String
     var caption: String?
     @ViewBuilder let content: Content

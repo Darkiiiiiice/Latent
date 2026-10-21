@@ -108,7 +108,7 @@ struct LibrarySnapshot: Sendable, Identifiable, Hashable {
     let voteAverage: Double?
     let addedAt: Date
 
-    // MARK: 详情富化（V2；旧数据为 nil，回填后补齐）
+    // MARK: 详情富化（V2 / V3；旧数据为 nil，回填后补齐）
     var genreNames: [String] = []
     var runtime: Int? = nil
     var director: String? = nil
@@ -117,6 +117,8 @@ struct LibrarySnapshot: Sendable, Identifiable, Hashable {
     var budget: Int64? = nil
     var revenue: Int64? = nil
     var detailFetchedAt: Date? = nil
+    /// 评分人数（V3），用于冷门 / 大众指数。
+    var voteCount: Int? = nil
 
     var id: String { "\(mediaKind.rawValue)-\(tmdbID)" }
 
@@ -147,7 +149,8 @@ extension FavoriteItem: LibraryRecord {
                         posterPath: posterPath, voteAverage: voteAverage, addedAt: addedAt,
                         genreNames: genreNames ?? [], runtime: runtime, director: director,
                         topCast: topCast ?? [], countries: countries ?? [],
-                        budget: budget, revenue: revenue, detailFetchedAt: detailFetchedAt)
+                        budget: budget, revenue: revenue, detailFetchedAt: detailFetchedAt,
+                        voteCount: voteCount)
     }
     var lastViewedAt: Date { addedAt }
 }
@@ -159,7 +162,8 @@ extension WatchlistItem: LibraryRecord {
                         posterPath: posterPath, voteAverage: voteAverage, addedAt: addedAt,
                         genreNames: genreNames ?? [], runtime: runtime, director: director,
                         topCast: topCast ?? [], countries: countries ?? [],
-                        budget: budget, revenue: revenue, detailFetchedAt: detailFetchedAt)
+                        budget: budget, revenue: revenue, detailFetchedAt: detailFetchedAt,
+                        voteCount: voteCount)
     }
     var lastViewedAt: Date { addedAt }
 }
@@ -171,6 +175,7 @@ extension HistoryEntry: LibraryRecord {
                         posterPath: posterPath, voteAverage: voteAverage, addedAt: lastViewedAt,
                         genreNames: genreNames ?? [], runtime: runtime, director: director,
                         topCast: topCast ?? [], countries: countries ?? [],
-                        budget: budget, revenue: revenue, detailFetchedAt: detailFetchedAt)
+                        budget: budget, revenue: revenue, detailFetchedAt: detailFetchedAt,
+                        voteCount: voteCount)
     }
 }

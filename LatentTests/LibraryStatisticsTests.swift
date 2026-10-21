@@ -30,6 +30,7 @@ struct LibraryStatisticsTests {
         countries: [String] = [],
         budget: Int64? = nil,
         revenue: Int64? = nil,
+        voteCount: Int? = nil,
         enriched: Bool = true
     ) -> LibrarySnapshot {
         LibrarySnapshot(
@@ -48,7 +49,8 @@ struct LibraryStatisticsTests {
             countries: countries,
             budget: budget,
             revenue: revenue,
-            detailFetchedAt: enriched ? addedAt : nil
+            detailFetchedAt: enriched ? addedAt : nil,
+            voteCount: voteCount
         )
     }
 
@@ -404,6 +406,49 @@ struct LibraryStatisticsTests {
             }
         }
         #expect(actionHit > 80)
+    }
+
+    @Test("冷门指数：评分人数越少分数越高，按分数降序、只取前 6")
+    func obscurityRanking() {
+        let stats = LibraryStatistics(
+            favorites: [
+                snapshot(id: 1, title: "大片", voteCount: 50_000),
+                snapshot(id: 2, title: "冷门 A", voteCount: 12),
+                snapshot(id: 3, title: "冷门 B", voteCount: 300),
+                snapshot(id: 4, title: "中间", voteCount: 2_000)
+            ],
+            watchlist: [],
+            now: date(2026, 10, 15),
+            calendar: calendar
+        )
+        #expect(stats.obscure.map(\.title) == ["冷门 A", "冷门 B", "中间", "大片"])
+        #expect(stats.obscure.map(\.score) == stats.obscure.map(\.score).sorted(by: >))
+        // 12 人评分 → 约 74 分；5 万人评分已超过「主流」基准，压到 0 分。
+        #expect(stats.obscure.first?.score == 74)
+        #expect(stats.obscure.last?.score == 0)
+    }
+
+    @Test("冷门指数：缺少 voteCount 的条目缺席，人数相同按标题稳定排序")
+    func obscurityMissingData() {
+        let stats = LibraryStatistics(
+            favorites: [
+                snapshot(id: 1, title: "B", voteCount: 5_000),
+                snapshot(id: 2, title: "A", voteCount: 5_000),
+                snapshot(id: 3, title: "无数据", voteCount: nil)
+            ],
+            watchlist: [],
+            now: date(2026, 10, 15),
+            calendar: calendar
+        )
+        #expect(stats.obscure.map(\.title) == ["A", "B"])
+    }
+
+    @Test("评分人数格式：千分位 / 万 / 亿")
+    func voteCountFormatting() {
+        #expect(Formatters.voteCount(32) == "32")
+        #expect(Formatters.voteCount(1_234) == "1,234")
+        #expect(Formatters.voteCount(23_456) == "2.3 万")
+        #expect(Formatters.voteCount(120_000_000) == "1.2 亿")
     }
 }
 

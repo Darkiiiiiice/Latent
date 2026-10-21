@@ -57,6 +57,17 @@ struct LibraryStatistics: Sendable, Equatable {
         var id: String { name }
     }
 
+    /// 冷门指数条目：评分人数越少越冷门，0 为大热、100 为极冷。
+    struct ObscurityPoint: Identifiable, Sendable, Equatable {
+        let id: String
+        let title: String
+        let year: Int?
+        let voteCount: Int
+        let score: Int
+
+        var votesText: String { Formatters.voteCount(voteCount) }
+    }
+
     /// 口味画像：「按口味来一部」的候选池与偏好摘要。
     struct TasteProfile: Sendable, Equatable {
         /// 排名前三的类型，决定加权。
@@ -136,6 +147,8 @@ struct LibraryStatistics: Sendable, Equatable {
     let radar: [RadarAxis]
     /// 口味画像（含「按口味来一部」的候选池）。
     let taste: TasteProfile
+    /// 冷门指数：评分人数最少的若干部（需已完成回填且有 voteCount）。
+    let obscure: [ObscurityPoint]
 
     var isEmpty: Bool { totalTitles == 0 }
 
@@ -213,9 +226,37 @@ struct LibraryStatistics: Sendable, Equatable {
             pool: Self.pool(items: items, watchlist: watchlist),
             poolIsWatchlist: !watchlist.isEmpty
         )
+
+        obscure = Self.obscurity(from: items)
     }
 
     // MARK: - 计算
+
+    /// 冷门指数：以评分人数取对数映射到 0…100（2 万人评分视作「主流」，记 0 分）。
+    ///
+    /// 只用本地 `voteCount`，未回填的条目自然缺席；同分时评分人数少的排前面，
+    /// 再按标题保证顺序稳定。
+    private static func obscurity(from items: [LibrarySnapshot]) -> [ObscurityPoint] {
+        let reference = log10(20_001.0)
+        return items
+            .compactMap { item -> ObscurityPoint? in
+                guard let votes = item.voteCount, votes > 0 else { return nil }
+                let raw = 100 * (1 - log10(Double(votes) + 1) / reference)
+                return ObscurityPoint(
+                    id: item.id,
+                    title: item.title,
+                    year: item.year,
+                    voteCount: votes,
+                    score: min(max(Int(raw.rounded()), 0), 100)
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.score != rhs.score { return lhs.score > rhs.score }
+                return (lhs.voteCount, lhs.title) < (rhs.voteCount, rhs.title)
+            }
+            .prefix(6)
+            .map { $0 }
+    }
 
     /// 候选池：清单优先（还没看的），否则全片库；只要电影与剧集。
     private static func pool(
