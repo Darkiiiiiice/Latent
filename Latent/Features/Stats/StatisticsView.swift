@@ -51,6 +51,12 @@ struct StatisticsView: View {
                         if !statistics.passport.isEmpty {
                             passportCard
                         }
+                        if !statistics.timeline.isEmpty {
+                            timelineCard
+                        }
+                        if statistics.radar.contains(where: { $0.count > 0 }) {
+                            radarCard
+                        }
                         if !statistics.genres.isEmpty {
                             rankingCard(
                                 title: "类型",
@@ -342,7 +348,71 @@ struct StatisticsView: View {
         }
     }
 
+    /// 电影史长廊：每部作品按年份落在一条横轴上，圆点大小固定、数量沿纵轴升起。
+    private var timelineCard: some View {
+        let first = statistics.timeline.first?.year
+        let last = statistics.timeline.last?.year
+        let caption: String = {
+            guard let first, let last else { return "按上映年份排列" }
+            return first == last ? "\(first)" : "\(first) — \(last)"
+        }()
+
+        return ChartCard(title: "收藏时间轴", caption: caption) {
+            Chart(statistics.timeline) { bucket in
+                RuleMark(y: .value("基线", 0))
+                    .foregroundStyle(UI.Palette.border)
+
+                PointMark(
+                    x: .value("年份", bucket.year),
+                    y: .value("数量", bucket.count)
+                )
+                .foregroundStyle(UI.Palette.accent)
+                .symbolSize(36)
+            }
+            .chartXScale(domain: (first ?? 0)...(last ?? 1))
+            .chartXAxis {
+                AxisMarks(values: Self.decadeTicks(from: first, to: last)) { _ in
+                    AxisGridLine().foregroundStyle(UI.Palette.border)
+                    AxisValueLabel()
+                        .font(.system(size: 10))
+                        .foregroundStyle(UI.Palette.textSecondary)
+                }
+            }
+            .chartYAxis {
+                AxisMarks { _ in
+                    AxisGridLine().foregroundStyle(UI.Palette.border)
+                    AxisValueLabel()
+                        .font(.system(size: 10))
+                        .foregroundStyle(UI.Palette.textSecondary)
+                }
+            }
+            .frame(height: 140)
+            .accessibilityLabel("收藏时间轴，从 \(first ?? 0) 到 \(last ?? 0)")
+        }
+    }
+
+    private var radarCard: some View {
+        ChartCard(title: "类型雷达", caption: "八维类型分布") {
+            RadarChart(axes: statistics.radar)
+                .frame(height: 200)
+        }
+    }
+
     // MARK: - 局部工具
+
+    /// 每十年一个刻度；不足十年跨度时至少给首尾两个。
+    private static func decadeTicks(from first: Int?, to last: Int?) -> [Int] {
+        guard let first, let last else { return [] }
+        guard last > first else { return [first] }
+        var ticks = stride(from: (first / 10) * 10, through: last, by: 10).map { $0 }
+        if ticks.first != first {
+            ticks.insert(first, at: 0)
+        }
+        if ticks.last != last {
+            ticks.append(last)
+        }
+        return ticks
+    }
 
     private static var worldRegion: MKCoordinateRegion {
         MKCoordinateRegion(
@@ -407,6 +477,110 @@ struct StatisticsView: View {
 }
 
 // MARK: - 局部组件
+
+/// 八维雷达图：Swift Charts 没有雷达类型，用 Canvas 自绘网格、轴线与数据多边形。
+private struct RadarChart: View {
+    let axes: [LibraryStatistics.RadarAxis]
+
+    private let startAngle = -Double.pi / 2
+
+    var body: some View {
+        Canvas { context, size in
+            guard axes.count >= 3 else { return }
+            let maxCount = max(axes.map(\.count).max() ?? 0, 1)
+            let radius = max(0, min(size.width, size.height) / 2 - 30)
+            guard radius > 0 else { return }
+
+            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            let step = 2 * Double.pi / Double(axes.count)
+
+            for ring in 1...3 {
+                let path = polygon(
+                    center: center,
+                    radius: radius * CGFloat(ring) / 3,
+                    step: step
+                )
+                context.stroke(path, with: .color(UI.Palette.border), lineWidth: 1)
+            }
+
+            for index in axes.indices {
+                var axisLine = Path()
+                axisLine.move(to: center)
+                axisLine.addLine(to: vertex(center: center, radius: radius, step: step, index: index))
+                context.stroke(axisLine, with: .color(UI.Palette.border), lineWidth: 1)
+            }
+
+            let dataPoints = axes.indices.map { index -> CGPoint in
+                let ratio = CGFloat(axes[index].count) / CGFloat(maxCount)
+                return vertex(
+                    center: center,
+                    radius: radius * max(ratio, 0),
+                    step: step,
+                    index: index
+                )
+            }
+            var dataPath = Path()
+            dataPath.addLines(dataPoints)
+            dataPath.closeSubpath()
+            context.fill(dataPath, with: .color(UI.Palette.accent.opacity(0.22)))
+            context.stroke(dataPath, with: .color(UI.Palette.accent), lineWidth: 1.5)
+
+            for point in dataPoints {
+                let dot = Path(ellipseIn: CGRect(x: point.x - 2, y: point.y - 2, width: 4, height: 4))
+                context.fill(dot, with: .color(UI.Palette.accent))
+            }
+
+            for (index, axis) in axes.enumerated() {
+                let labelPoint = vertex(
+                    center: center,
+                    radius: radius + 16,
+                    step: step,
+                    index: index
+                )
+                let label = context.resolve(
+                    Text(axis.name)
+                        .font(.system(size: 10))
+                        .foregroundStyle(UI.Palette.textSecondary)
+                )
+                context.draw(label, at: labelPoint, anchor: .center)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.summary(axes))
+    }
+
+    private func vertex(
+        center: CGPoint,
+        radius: CGFloat,
+        step: Double,
+        index: Int
+    ) -> CGPoint {
+        let angle = startAngle + step * Double(index)
+        return CGPoint(
+            x: center.x + radius * CGFloat(cos(angle)),
+            y: center.y + radius * CGFloat(sin(angle))
+        )
+    }
+
+    private func polygon(center: CGPoint, radius: CGFloat, step: Double) -> Path {
+        var path = Path()
+        for index in axes.indices {
+            let point = vertex(center: center, radius: radius, step: step, index: index)
+            if index == 0 {
+                path.move(to: point)
+            } else {
+                path.addLine(to: point)
+            }
+        }
+        path.closeSubpath()
+        return path
+    }
+
+    private static func summary(_ axes: [LibraryStatistics.RadarAxis]) -> String {
+        let parts = axes.filter { $0.count > 0 }.map { "\($0.name) \($0.count) 部" }
+        return parts.isEmpty ? "类型雷达，暂无数据" : "类型雷达：" + parts.joined(separator: "，")
+    }
+}
 
 private struct SummaryTile: View {
     let title: String

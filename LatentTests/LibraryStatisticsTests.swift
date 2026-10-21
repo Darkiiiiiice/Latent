@@ -214,6 +214,68 @@ struct LibraryStatisticsTests {
         #expect(stats.countries.map(\.name) == ["中国", "美国"])
     }
 
+    @Test("收藏时间轴从最早到最晚逐年展开，空缺年份补 0")
+    func timelineRange() {
+        let stats = LibraryStatistics(
+            favorites: [
+                snapshot(id: 1, year: 1994),
+                snapshot(id: 2, year: 1999),
+                snapshot(id: 3, year: 2024)
+            ],
+            watchlist: [],
+            now: date(2026, 10, 15),
+            calendar: calendar
+        )
+        #expect(stats.timeline.count == 31)
+        #expect(stats.timeline.first?.year == 1994)
+        #expect(stats.timeline.last?.year == 2024)
+        #expect(stats.timeline.first { $0.year == 1999 }?.count == 1)
+        #expect(stats.timeline.first { $0.year == 2000 }?.count == 0)
+    }
+
+    @Test("时间轴过滤异常年份；没有年份时为空")
+    func timelineFiltersInvalidYears() {
+        let stats = LibraryStatistics(
+            favorites: [
+                snapshot(id: 1, year: 0),
+                snapshot(id: 2, year: 1700),
+                snapshot(id: 3, year: 2020)
+            ],
+            watchlist: [],
+            now: date(2026, 10, 15),
+            calendar: calendar
+        )
+        #expect(stats.timeline.map(\.year) == [2020])
+
+        let empty = LibraryStatistics(
+            favorites: [snapshot(id: 1, year: nil)],
+            watchlist: [],
+            now: date(2026, 10, 15),
+            calendar: calendar
+        )
+        #expect(empty.timeline.isEmpty)
+    }
+
+    @Test("雷达固定八维顺序，别名合并且同一作品不重复计数")
+    func radarAxes() {
+        let stats = LibraryStatistics(
+            favorites: [
+                snapshot(id: 1, genres: ["科幻", "科幻奇幻", "剧情"]),
+                snapshot(id: 2, genres: ["Sci-Fi & Fantasy", "Action"]),
+                snapshot(id: 3, genres: ["爱情", "未知类型"])
+            ],
+            watchlist: [],
+            now: date(2026, 10, 15),
+            calendar: calendar
+        )
+        #expect(stats.radar.map(\.name) == ["科幻", "剧情", "喜剧", "恐怖", "动作", "爱情", "动画", "纪录片"])
+        #expect(stats.radar.first { $0.name == "科幻" }?.count == 2)
+        #expect(stats.radar.first { $0.name == "剧情" }?.count == 1)
+        #expect(stats.radar.first { $0.name == "动作" }?.count == 1)
+        #expect(stats.radar.first { $0.name == "爱情" }?.count == 1)
+        #expect(stats.radar.first { $0.name == "喜剧" }?.count == 0)
+    }
+
     @Test("空片库标记为空；空白名字不进入榜单")
     func emptyAndBlank() {
         let empty = LibraryStatistics(

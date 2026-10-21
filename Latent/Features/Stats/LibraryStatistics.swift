@@ -50,6 +50,13 @@ struct LibraryStatistics: Sendable, Equatable {
         var id: String { code }
     }
 
+    /// 雷达图固定八维（名称规则见 `radarAxes`）。
+    struct RadarAxis: Identifiable, Sendable, Equatable {
+        let name: String
+        let count: Int
+        var id: String { name }
+    }
+
     let totalTitles: Int
     let favoriteCount: Int
     let watchlistCount: Int
@@ -71,6 +78,10 @@ struct LibraryStatistics: Sendable, Equatable {
     let budgetRevenue: [BudgetPoint]
     /// 观影护照：有坐标的国家 / 地区（按条数降序）。
     let passport: [CountryStamp]
+    /// 收藏时间轴：最早到最晚年份逐年连续，无作品的年份补 0。
+    let timeline: [YearBucket]
+    /// 类型雷达：固定八维，按设计顺序排列。
+    let radar: [RadarAxis]
 
     var isEmpty: Bool { totalTitles == 0 }
 
@@ -119,6 +130,8 @@ struct LibraryStatistics: Sendable, Equatable {
         .sorted { ($0.profit, $0.title) > ($1.profit, $1.title) }
 
         passport = Self.passport(from: items)
+        timeline = Self.timeline(from: items)
+        radar = Self.radar(from: items)
 
         decades = Self.histogram(
             items.compactMap(\.year).map { $0 / 10 * 10 },
@@ -185,6 +198,46 @@ struct LibraryStatistics: Sendable, Equatable {
                 return CountryStamp(code: code, name: info.name, count: count)
             }
             .sorted { ($0.count, $1.name) > ($1.count, $0.name) }
+    }
+
+    /// 作品年份的有效区间：过滤脏数据，避免异常年份把时间轴拉到几百年。
+    private static let validYearRange = 1888...2100
+
+    /// 最早到最晚年份逐年展开；无作品的年份保留 0，让长廊保持真实间距。
+    private static func timeline(from items: [LibrarySnapshot]) -> [YearBucket] {
+        var counts: [Int: Int] = [:]
+        for year in items.compactMap(\.year) where validYearRange.contains(year) {
+            counts[year, default: 0] += 1
+        }
+        guard let earliest = counts.keys.min(), let latest = counts.keys.max() else { return [] }
+        return (earliest...latest).map { YearBucket(year: $0, count: counts[$0] ?? 0) }
+    }
+
+    /// 八维类型：名称可能随 TMDB 语言变化（如 TV 的「科幻奇幻」），用别名合并。
+    private static let radarAxes: [(name: String, aliases: Set<String>)] = [
+        ("科幻", ["科幻", "科幻奇幻", "Science Fiction", "Sci-Fi & Fantasy"]),
+        ("剧情", ["剧情", "Drama"]),
+        ("喜剧", ["喜剧", "Comedy"]),
+        ("恐怖", ["恐怖", "Horror"]),
+        ("动作", ["动作", "动作冒险", "Action", "Action & Adventure"]),
+        ("爱情", ["爱情", "Romance"]),
+        ("动画", ["动画", "Animation"]),
+        ("纪录片", ["纪录片", "Documentary"])
+    ]
+
+    private static func radar(from items: [LibrarySnapshot]) -> [RadarAxis] {
+        var counts = Array(repeating: 0, count: radarAxes.count)
+        for item in items {
+            let names = Set(item.genreNames.map {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            })
+            // 同一部作品在同一维度只计一次：即使同时带「科幻」与「科幻奇幻」。
+            for (index, axis) in radarAxes.enumerated()
+            where axis.aliases.contains(where: { names.contains($0.lowercased()) }) {
+                counts[index] += 1
+            }
+        }
+        return zip(radarAxes, counts).map { RadarAxis(name: $0.0.name, count: $0.1) }
     }
 
     /// 最近 12 个月（含当月）的入库条数；空缺月份补 0，曲线连续。
