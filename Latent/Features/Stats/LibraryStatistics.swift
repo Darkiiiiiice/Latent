@@ -57,6 +57,58 @@ struct LibraryStatistics: Sendable, Equatable {
         var id: String { name }
     }
 
+    /// 口味画像：「按口味来一部」的候选池与偏好摘要。
+    struct TasteProfile: Sendable, Equatable {
+        /// 排名前三的类型，决定加权。
+        let topGenres: [Slice]
+        /// 作品数量最多的年代；同数量取更近的年代。
+        let favoriteDecade: YearBucket?
+        /// 片库平均分（无评分数据时为空）。
+        let averageRating: Double?
+        /// 候选池：观看清单非空时优先清单（还没看过的），否则用收藏。
+        let pool: [LibrarySnapshot]
+        let poolIsWatchlist: Bool
+
+        var isEmpty: Bool {
+            topGenres.isEmpty && favoriteDecade == nil && averageRating == nil
+        }
+
+        /// 加权随机：命中前三类型的作品权重更高（每命中一个 +2）。
+        /// - Parameter previousID: 上一次选中的条目，多于一条时会避开。
+        func pick<R: RandomNumberGenerator>(
+            excluding previousID: String? = nil,
+            using rng: inout R
+        ) -> LibrarySnapshot? {
+            guard !pool.isEmpty else { return nil }
+            let filtered = pool.count > 1 && previousID != nil
+                ? pool.filter { $0.id != previousID }
+                : pool
+            let candidates = filtered.isEmpty ? pool : filtered
+
+            let keys = Set(topGenres.map(\.name))
+            let weights = candidates.map { item -> Int in
+                let names = Set(item.genreNames.map {
+                    $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                })
+                return 1 + 2 * keys.intersection(names).count
+            }
+            let total = weights.reduce(0, +)
+            guard total > 0 else { return candidates.randomElement(using: &rng) }
+
+            var roll = Int.random(in: 0..<total, using: &rng)
+            for (index, item) in candidates.enumerated() {
+                if roll < weights[index] { return item }
+                roll -= weights[index]
+            }
+            return candidates.last
+        }
+
+        func pick(excluding previousID: String? = nil) -> LibrarySnapshot? {
+            var rng = SystemRandomNumberGenerator()
+            return pick(excluding: previousID, using: &rng)
+        }
+    }
+
     let totalTitles: Int
     let favoriteCount: Int
     let watchlistCount: Int
@@ -82,6 +134,8 @@ struct LibraryStatistics: Sendable, Equatable {
     let timeline: [YearBucket]
     /// 类型雷达：固定八维，按设计顺序排列。
     let radar: [RadarAxis]
+    /// 口味画像（含「按口味来一部」的候选池）。
+    let taste: TasteProfile
 
     var isEmpty: Bool { totalTitles == 0 }
 
@@ -146,9 +200,34 @@ struct LibraryStatistics: Sendable, Equatable {
         )
 
         monthly = Self.months(items: items, now: now, calendar: calendar)
+
+        let ratingsValues = items.compactMap(\.voteAverage)
+        taste = TasteProfile(
+            topGenres: Array(genres.prefix(3)),
+            favoriteDecade: decades.max { lhs, rhs in
+                lhs.count == rhs.count ? lhs.year < rhs.year : lhs.count < rhs.count
+            },
+            averageRating: ratingsValues.isEmpty
+                ? nil
+                : ratingsValues.reduce(0, +) / Double(ratingsValues.count),
+            pool: Self.pool(items: items, watchlist: watchlist),
+            poolIsWatchlist: !watchlist.isEmpty
+        )
     }
 
     // MARK: - 计算
+
+    /// 候选池：清单优先（还没看的），否则全片库；只要电影与剧集。
+    private static func pool(
+        items: [LibrarySnapshot],
+        watchlist: [LibrarySnapshot]
+    ) -> [LibrarySnapshot] {
+        let playable = items.filter { $0.mediaKind == .movie || $0.mediaKind == .tv }
+        guard !watchlist.isEmpty else { return playable }
+        let watchlistIDs = Set(watchlist.map(\.id))
+        let preferred = playable.filter { watchlistIDs.contains($0.id) }
+        return preferred.isEmpty ? playable : preferred
+    }
 
     private static func top(_ values: [String], limit: Int) -> [Slice] {
         var counts: [String: Int] = [:]

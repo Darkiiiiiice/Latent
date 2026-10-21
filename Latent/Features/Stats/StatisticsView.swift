@@ -9,6 +9,9 @@ import SwiftUI
 struct StatisticsView: View {
     @Environment(AppEnvironment.self) private var appEnv
 
+    /// 「按口味来一部」上一次选中的条目，避免连点两次看到同一部。
+    @State private var lastTastePickID: String?
+
     private var statistics: LibraryStatistics {
         LibraryStatistics(
             favorites: appEnv.library.favoriteItems,
@@ -30,6 +33,10 @@ struct StatisticsView: View {
                     )
                 } else {
                     summaryGrid
+
+                    if !statistics.taste.isEmpty {
+                        tasteCard
+                    }
 
                     LazyVGrid(
                         columns: [GridItem(.adaptive(minimum: 360), spacing: UI.Spacing.s4)],
@@ -141,6 +148,77 @@ struct StatisticsView: View {
                 value: Formatters.runtime(minutes: statistics.movieMinutes) ?? "—"
             )
         }
+    }
+
+    // MARK: - 口味画像
+
+    private var tasteCard: some View {
+        let taste = statistics.taste
+        return ChartCard(title: "口味画像", caption: "由收藏与观看清单推算") {
+            VStack(alignment: .leading, spacing: UI.Spacing.s3) {
+                if !taste.topGenres.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(taste.topGenres) { genre in
+                            Text(genre.name)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(UI.Palette.accent)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(UI.Palette.accent.opacity(0.12), in: Capsule())
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("偏爱类型：" + taste.topGenres.map(\.name).joined(separator: "、"))
+                }
+
+                HStack(spacing: UI.Spacing.s4) {
+                    if let decade = taste.favoriteDecade {
+                        tasteFact(label: "最常看", value: "\(decade.year)s")
+                    }
+                    if let average = taste.averageRating, let text = Formatters.rating(average) {
+                        tasteFact(label: "平均分", value: text)
+                    }
+                    tasteFact(
+                        label: "候选",
+                        value: taste.poolIsWatchlist
+                            ? "观看清单 \(taste.pool.count) 部"
+                            : "片库 \(taste.pool.count) 部"
+                    )
+                }
+
+                HStack(spacing: UI.Spacing.s3) {
+                    Button {
+                        openTastePick()
+                    } label: {
+                        Label("按口味来一部", systemImage: "dice")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(taste.pool.isEmpty)
+                    .help("按类型偏好加权，从\(taste.poolIsWatchlist ? "观看清单" : "片库")里随机打开一部")
+
+                    Text(taste.poolIsWatchlist ? "从还没看的片子里挑" : "从片库里随机挑")
+                        .font(.system(size: 11))
+                        .foregroundStyle(UI.Palette.textSecondary)
+                }
+            }
+        }
+    }
+
+    private func tasteFact(label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundStyle(UI.Palette.textSecondary)
+            NumericText(text: value, size: 13)
+        }
+    }
+
+    private func openTastePick() {
+        guard let pick = statistics.taste.pick(excluding: lastTastePickID) else { return }
+        lastTastePickID = pick.id
+        guard let destination = DetailDestination.from(pick.asSummary) else { return }
+        NotificationCenter.default.post(name: AppCommandBus.pushDetail, object: destination)
     }
 
     // MARK: - 图表卡片

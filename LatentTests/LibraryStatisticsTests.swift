@@ -299,4 +299,126 @@ struct LibraryStatisticsTests {
         #expect(stats.cast.isEmpty)
         #expect(stats.countries.isEmpty)
     }
+
+    @Test("口味画像：前三类型、最常看年代（同数量取更近）、平均分")
+    func tasteProfileSummary() {
+        let stats = LibraryStatistics(
+            favorites: [
+                snapshot(id: 1, year: 1994, rating: 8.0, genres: ["剧情"]),
+                snapshot(id: 2, year: 2019, rating: 7.0, genres: ["剧情", "动作"]),
+                snapshot(id: 3, year: 2021, rating: 9.0, genres: ["动作", "科幻"])
+            ],
+            watchlist: [],
+            now: date(2026, 10, 15),
+            calendar: calendar
+        )
+        #expect(Set(stats.taste.topGenres.prefix(2).map(\.name)) == ["剧情", "动作"])
+        #expect(stats.taste.topGenres.last?.name == "科幻")
+        #expect(stats.taste.favoriteDecade?.year == 2020)
+        #expect(abs((stats.taste.averageRating ?? 0) - 8.0) < 0.001)
+        #expect(stats.taste.poolIsWatchlist == false)
+    }
+
+    @Test("口味候选池优先观看清单，清单为空时退回片库")
+    func tastePoolPreference() {
+        let favorites = [
+            snapshot(id: 1),
+            snapshot(id: 2),
+            snapshot(id: 3)
+        ]
+        let watchlistEmpty = LibraryStatistics(
+            favorites: favorites,
+            watchlist: [],
+            now: date(2026, 10, 15),
+            calendar: calendar
+        )
+        #expect(Set(watchlistEmpty.taste.pool.map(\.id)) == ["movie-1", "movie-2", "movie-3"])
+        #expect(watchlistEmpty.taste.poolIsWatchlist == false)
+
+        let withWatchlist = LibraryStatistics(
+            favorites: favorites,
+            watchlist: [snapshot(id: 2)],
+            now: date(2026, 10, 15),
+            calendar: calendar
+        )
+        #expect(withWatchlist.taste.pool.map(\.id) == ["movie-2"])
+        #expect(withWatchlist.taste.poolIsWatchlist)
+    }
+
+    @Test("按口味随机：避开上一次、单条时原地返回、空池返回 nil")
+    func tastePick() {
+        let stats = LibraryStatistics(
+            favorites: [
+                snapshot(id: 1, genres: ["动作"]),
+                snapshot(id: 2, genres: ["剧情"])
+            ],
+            watchlist: [],
+            now: date(2026, 10, 15),
+            calendar: calendar
+        )
+        var rng = SeededGenerator(seed: 7)
+        #expect(stats.taste.pick(excluding: "movie-1", using: &rng)?.id == "movie-2")
+
+        let single = LibraryStatistics(
+            favorites: [snapshot(id: 1)],
+            watchlist: [],
+            now: date(2026, 10, 15),
+            calendar: calendar
+        )
+        var singleRNG = SeededGenerator(seed: 1)
+        #expect(single.taste.pick(excluding: "movie-1", using: &singleRNG)?.id == "movie-1")
+
+        let empty = LibraryStatistics(
+            favorites: [],
+            watchlist: [],
+            now: date(2026, 10, 15),
+            calendar: calendar
+        )
+        var emptyRNG = SeededGenerator(seed: 1)
+        #expect(empty.taste.pick(using: &emptyRNG) == nil)
+    }
+
+    @Test("命中偏好类型的条目权重更高")
+    func tastePickFavorsPreferredGenres() {
+        // 6 部动作（每部权重 1+2×1=3）+ 5 部各不相同的类型（多数权重 3、少数 1），
+        // 命中偏好的概率明显高于均分（1/11 ≈ 9%），预期落在六成上下。
+        var favorites: [LibrarySnapshot] = (1...6).map { snapshot(id: $0, genres: ["动作"]) }
+        favorites += [
+            snapshot(id: 7, genres: ["剧情"]),
+            snapshot(id: 8, genres: ["喜剧"]),
+            snapshot(id: 9, genres: ["恐怖"]),
+            snapshot(id: 10, genres: ["纪录片"]),
+            snapshot(id: 11, genres: ["动画"])
+        ]
+        let stats = LibraryStatistics(
+            favorites: favorites,
+            watchlist: [],
+            now: date(2026, 10, 15),
+            calendar: calendar
+        )
+        var rng = SeededGenerator(seed: 42)
+        var actionHit = 0
+        for _ in 0..<200 {
+            if stats.taste.pick(using: &rng)?.genreNames.contains("动作") == true {
+                actionHit += 1
+            }
+        }
+        #expect(actionHit > 80)
+    }
+}
+
+/// 可复现的随机源（xorshift64），避免统计类测试随系统随机数抖动。
+private struct SeededGenerator: RandomNumberGenerator {
+    private var state: UInt64
+
+    init(seed: UInt64) {
+        state = seed == 0 ? 0x9E37_79B9_7F4A_7C15 : seed
+    }
+
+    mutating func next() -> UInt64 {
+        state ^= state << 13
+        state ^= state >> 7
+        state ^= state << 17
+        return state
+    }
 }
