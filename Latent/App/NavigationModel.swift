@@ -95,6 +95,8 @@ enum AppCommandBus {
     /// 导出全部库（文件菜单；根视图消费）。
     static let exportAllJSON = Notification.Name("app.latent.command.exportAllJSON")
     static let exportAllMarkdown = Notification.Name("app.latent.command.exportAllMarkdown")
+    /// 从图片识别文字（文件菜单 ⌘⇧O；主界面打开搜索面板并弹出选择器）。
+    static let recognizeImage = Notification.Name("app.latent.command.recognizeImage")
 
     static func select(_ scope: SidebarScope) {
         NotificationCenter.default.post(name: selectScope, object: scope.rawValue)

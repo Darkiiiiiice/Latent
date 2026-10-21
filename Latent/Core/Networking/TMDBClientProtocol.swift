@@ -41,10 +41,15 @@ struct MockTMDBClient: TMDBClientProtocol {
     var discoverPage = Paged(page: 1, items: MediaSummary.samples(count: 18, kind: .movie), totalPages: 2, totalResults: 36)
     var genres: [Genre] = Genre.samples
     var providers: [WatchProvider] = WatchProvider.samples
+    /// 置为非空时，`searchMulti` 抛出该错误（单测「搜索失败不崩」用）。
+    var searchError: APIError?
 
     func validateToken() async throws -> APIConfiguration { configuration }
     func trending(mediaKind: MediaKind, window: Endpoint.TrendingWindow, page: Int) async throws -> Paged<MediaSummary> { trendingPage }
-    func searchMulti(query: String, page: Int) async throws -> Paged<SearchResult> { searchPage }
+    func searchMulti(query: String, page: Int) async throws -> Paged<SearchResult> {
+        if let searchError { throw searchError }
+        return searchPage
+    }
     func movieDetail(id: Int) async throws -> MovieDetail { movie }
     func tvDetail(id: Int) async throws -> TVShowDetail { show }
     func tvSeason(id: Int, seasonNumber: Int) async throws -> SeasonDetail { season }

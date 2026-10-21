@@ -22,8 +22,8 @@ settings:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     SWIFT_APPROACHABLE_CONCURRENCY: YES
-    MARKETING_VERSION: "1.15.0"
-    CURRENT_PROJECT_VERSION: "27"
+    MARKETING_VERSION: "1.16.0"
+    CURRENT_PROJECT_VERSION: "28"
     # App Intents / Shortcuts 在 macOS 27 要求可验证的 Team ID；
     # 使用本机的免费 Apple Development 个人团队（无需付费账号）。
     CODE_SIGN_STYLE: Automatic

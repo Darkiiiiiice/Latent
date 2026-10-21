@@ -13,6 +13,7 @@ struct MainSplitView: View {
     @State private var isSearchPresented = false
     @State private var searchSeed = ""
     @State private var searchGeneration = 0
+    @State private var searchWantsImage = false
     @State private var searchFocus = false
     @AppStorage("view.gridMode") private var gridMode = true
 
@@ -32,7 +33,7 @@ struct MainSplitView: View {
         .background(UI.Palette.bg)
         .overlay(alignment: .topTrailing) {
             if isSearchPresented {
-                SearchPanel(isPresented: $isSearchPresented, initialQuery: searchSeed)
+                SearchPanel(isPresented: $isSearchPresented, initialQuery: searchSeed, autoPickImage: searchWantsImage)
                     .id(searchGeneration)
                     .environment(appEnv)
                     .environment(settings)
@@ -50,8 +51,16 @@ struct MainSplitView: View {
         .onReceive(NotificationCenter.default.publisher(for: AppCommandBus.focusSearch)) { _ in
             if !isSearchPresented {
                 searchSeed = ""
+                searchWantsImage = false
                 searchGeneration += 1
             }
+            isSearchPresented = true
+        }
+        // 文件菜单「从图片识别…」：打开搜索面板并直接弹出图片选择器。
+        .onReceive(NotificationCenter.default.publisher(for: AppCommandBus.recognizeImage)) { _ in
+            searchSeed = ""
+            searchWantsImage = true
+            searchGeneration += 1
             isSearchPresented = true
         }
         .onReceive(NotificationCenter.default.publisher(for: AppCommandBus.back)) { _ in

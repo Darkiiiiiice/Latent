@@ -35,9 +35,15 @@ struct AppCommands: Commands {
             .keyboardShortcut("f", modifiers: .command)
         }
 
-        // 文件菜单：导出全部库（本地 JSON / Markdown）
+        // 文件菜单：从图片识别（截图） + 导出全部库（本地 JSON / Markdown）
         CommandGroup(after: .saveItem) {
+            Button("从图片识别…") {
+                NotificationCenter.default.post(name: AppCommandBus.recognizeImage, object: nil)
+            }
+            .keyboardShortcut("o", modifiers: [.command, .shift])
+
             Divider()
+
             Button("导出全部库为 JSON…") {
                 NotificationCenter.default.post(name: AppCommandBus.exportAllJSON, object: nil)
             }

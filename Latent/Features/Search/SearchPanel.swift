@@ -1,8 +1,12 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// 全局搜索面板（设计文档第 8.6 节）：
 /// 输入 → 300ms 防抖 → `/search/multi`；结果按「电影 / 剧集 / 人物」分组；
 /// 空查询显示最近搜索（可清空）。
+///
+/// v1.16 起支持「截图识别」：拖图片到面板、或点输入框右侧的取景框按钮选图，
+/// 识别出的文字自动查 TMDB 并给出候选。
 struct SearchPanel: View {
     @Binding var isPresented: Bool
 
@@ -13,11 +17,30 @@ struct SearchPanel: View {
     @State private var feed: PaginatedFeed<SearchResult>?
     @State private var selectedIndex: Int = -1
     @State private var debouncer = Debouncer()
+    @State private var recognition: RecognitionState = .idle
+    @State private var isDropTargeted = false
+    @State private var isFileImporterPresented = false
     @FocusState private var isFocused: Bool
 
-    init(isPresented: Binding<Bool>, initialQuery: String = "") {
+    /// 截图识别状态（与输入框搜索互不影响，识别结果单独成组展示）。
+    private enum RecognitionState: Equatable {
+        case idle
+        case working
+        case candidates([OCRSearchMatcher.Candidate])
+        case failed(String)
+
+        var isWorking: Bool { self == .working }
+
+        var failure: String? {
+            if case .failed(let message) = self { return message }
+            return nil
+        }
+    }
+
+    init(isPresented: Binding<Bool>, initialQuery: String = "", autoPickImage: Bool = false) {
         _isPresented = isPresented
         _query = State(initialValue: initialQuery)
+        _isFileImporterPresented = State(initialValue: autoPickImage)
     }
 
     private var results: [SearchResult] { feed?.items ?? [] }
@@ -62,6 +85,9 @@ struct SearchPanel: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: UI.Spacing.s4) {
+                    recognitionHeader
+                    recognitionGroup
+
                     if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         recentSearches
                     } else {
@@ -115,6 +141,23 @@ struct SearchPanel: View {
             }
         }
         .onExitCommand { isPresented = false }
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let url = urls.first else { return false }
+            startRecognition(url)
+            return true
+        } isTargeted: { targeted in
+            isDropTargeted = targeted
+        }
+        .overlay { dropHighlight }
+        .fileImporter(
+            isPresented: $isFileImporterPresented,
+            allowedContentTypes: [.image],
+            allowsMultipleSelection: false
+        ) { result in
+            if case .success(let urls) = result, let url = urls.first {
+                startRecognition(url)
+            }
+        }
     }
 
     private var searchField: some View {
@@ -146,6 +189,19 @@ struct SearchPanel: View {
                 .buttonStyle(.plain)
                 .help("清空（Esc）")
             }
+
+            Divider().frame(height: 18)
+
+            Button {
+                isFileImporterPresented = true
+            } label: {
+                Image(systemName: "text.viewfinder")
+                    .font(.system(size: 13))
+                    .foregroundStyle(UI.Palette.accent)
+            }
+            .buttonStyle(.plain)
+            .help("从图片识别片名（⌘⇧O），也可以把图片拖进面板")
+            .accessibilityLabel("从图片识别")
 
             Text("⌘F")
                 .font(.system(size: 10, design: .monospaced))
@@ -295,6 +351,124 @@ struct SearchPanel: View {
         }
     }
 
+    // MARK: - 截图识别（v1.16）
+
+    /// 识别进行中 / 失败提示；两者互斥，且都不与候选列表同时出现。
+    @ViewBuilder
+    private var recognitionHeader: some View {
+        if recognition.isWorking {
+            HStack(spacing: UI.Spacing.s2) {
+                ProgressView().controlSize(.small)
+                Text("正在识别图片中的文字…")
+                    .font(.system(size: 12))
+                    .foregroundStyle(UI.Palette.textSecondary)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, UI.Spacing.s2)
+        } else if let message = recognition.failure {
+            HStack(spacing: UI.Spacing.s2) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(UI.Palette.warning)
+                Text(message)
+                    .font(.system(size: 12))
+                    .foregroundStyle(UI.Palette.textSecondary)
+                Spacer(minLength: 0)
+                Button("知道了") { recognition = .idle }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11))
+                    .foregroundStyle(UI.Palette.accent)
+            }
+            .padding(.horizontal, UI.Spacing.s3)
+            .padding(.vertical, UI.Spacing.s2)
+            .background(UI.Palette.surface, in: RoundedRectangle(cornerRadius: UI.Radius.button, style: .continuous))
+        }
+    }
+
+    /// 候选列表：识别出的文字查到多个相近作品时列出，由用户挑。
+    @ViewBuilder
+    private var recognitionGroup: some View {
+        if case .candidates(let list) = recognition {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: UI.Spacing.s2) {
+                    Image(systemName: "text.viewfinder")
+                        .font(.system(size: 11))
+                        .foregroundStyle(UI.Palette.accent)
+                    Text("识别结果")
+                        .font(.system(size: 11, weight: .medium))
+                        .kerning(0.4)
+                        .foregroundStyle(UI.Palette.textSecondary)
+                    Text("\(list.count) 条")
+                        .font(.system(size: 10))
+                        .foregroundStyle(UI.Palette.textSecondary)
+                    Spacer(minLength: 0)
+                    Button("清除") { recognition = .idle }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11))
+                        .foregroundStyle(UI.Palette.accent)
+                }
+
+                ForEach(list) { candidate in
+                    OCRResultRow(candidate: candidate) { open(candidate.result) }
+                }
+            }
+        }
+    }
+
+    /// 拖拽悬停时的高亮提示（设计文档第 8 节：强调色 + 无弹簧动效）。
+    @ViewBuilder
+    private var dropHighlight: some View {
+        if isDropTargeted {
+            RoundedRectangle(cornerRadius: UI.Radius.button, style: .continuous)
+                .fill(UI.Palette.accent.opacity(0.10))
+                .overlay {
+                    RoundedRectangle(cornerRadius: UI.Radius.button, style: .continuous)
+                        .strokeBorder(
+                            UI.Palette.accent,
+                            style: StrokeStyle(lineWidth: 2, dash: [6, 4])
+                        )
+                }
+                .overlay {
+                    VStack(spacing: UI.Spacing.s2) {
+                        Image(systemName: "text.viewfinder")
+                            .font(.system(size: 22))
+                        Text("松开，识别图片里的片名")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundStyle(UI.Palette.accent)
+                }
+                .allowsHitTesting(false)
+                .transition(.opacity)
+        }
+    }
+
+    /// 识别图片 → 逐行查 TMDB → 明显胜出直接打开，否则列候选。
+    private func startRecognition(_ url: URL) {
+        withAnimation(UI.Motion.imageFade) { recognition = .working }
+
+        Task { @MainActor in
+            do {
+                let lines = try await ImageTextRecognizer.lines(from: url)
+                let outcome = await OCRSearchMatcher.match(lines: lines, client: appEnv.client)
+                apply(outcome)
+            } catch {
+                recognition = .failed(error.localizedDescription)
+            }
+        }
+    }
+
+    private func apply(_ outcome: OCRSearchMatcher.Outcome) {
+        switch outcome {
+        case .empty:
+            recognition = .failed("没有从这张图片里认出可搜索的文字")
+        case .matched(let candidate):
+            recognition = .idle
+            open(candidate.result)
+        case .candidates(let list):
+            withAnimation(UI.Motion.imageFade) { recognition = .candidates(list) }
+        }
+    }
+
     private func scheduleSearch(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -380,6 +554,14 @@ struct SearchPanel: View {
         isPresented = false
         NotificationCenter.default.post(name: AppCommandBus.pushDetail, object: DetailDestination.person(id: person.id))
     }
+
+    /// 识别候选是多类型的，统一入口分发（空 query 不会写进最近搜索）。
+    private func open(_ result: SearchResult) {
+        switch result {
+        case .movie(let item), .tv(let item): open(item)
+        case .person(let person): open(person)
+        }
+    }
 }
 
 /// 全局搜索里的片库紧凑行（v1.8）。
@@ -431,5 +613,82 @@ private struct LocalLibraryRow: View {
             withAnimation(UI.Motion.hover) { isHovering = hovering }
         }
         .accessibilityLabel(item.year.map { "\(item.title)，\($0) 年" } ?? item.title)
+    }
+}
+
+/// 截图识别的候选行（v1.16）：海报缩略 + 标题 + 类型 · 年份 + 命中它的那行文字。
+private struct OCRResultRow: View {
+    let candidate: OCRSearchMatcher.Candidate
+    let onOpen: () -> Void
+
+    @State private var isHovering = false
+
+    private var posterPath: String? {
+        switch candidate.result {
+        case .movie(let item), .tv(let item): return item.posterPath
+        case .person(let person): return person.profilePath
+        }
+    }
+
+    private var title: String {
+        switch candidate.result {
+        case .movie(let item), .tv(let item): return item.title
+        case .person(let person): return person.name
+        }
+    }
+
+    private var subtitle: String {
+        switch candidate.result {
+        case .movie(let item), .tv(let item):
+            var parts = [item.mediaKind.label]
+            if let year = item.year { parts.append("\(year)") }
+            return parts.joined(separator: " · ")
+        case .person(let person):
+            return person.knownForDepartment ?? "人物"
+        }
+    }
+
+    var body: some View {
+        Button(action: onOpen) {
+            HStack(spacing: UI.Spacing.s3) {
+                PosterImage(path: posterPath, displayWidth: 32, cornerRadius: 4)
+                    .frame(width: 32, height: 48)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(UI.Palette.textPrimary)
+                        .lineLimit(1)
+                    Text(subtitle)
+                        .font(.system(size: 11))
+                        .foregroundStyle(UI.Palette.textSecondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+
+                Text("「\(candidate.matchedQuery)」")
+                    .font(.system(size: 10))
+                    .foregroundStyle(UI.Palette.textSecondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: 120, alignment: .trailing)
+
+                Image(systemName: "arrow.up.forward")
+                    .font(.system(size: 10))
+                    .foregroundStyle(UI.Palette.textSecondary)
+            }
+            .padding(.horizontal, UI.Spacing.s2)
+            .padding(.vertical, 5)
+            .background(
+                isHovering ? UI.Palette.surfaceElevated : .clear,
+                in: RoundedRectangle(cornerRadius: UI.Radius.button, style: .continuous)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(UI.Motion.hover) { isHovering = hovering }
+        }
+        .accessibilityLabel("\(title)，\(subtitle)")
     }
 }
