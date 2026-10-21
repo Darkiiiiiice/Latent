@@ -58,14 +58,46 @@ enum Formatters {
     /// 日期：2024-03-01 → 「2024 年 3 月 1 日」；解析失败返回原文。
     static func fullDate(_ dateString: String?) -> String? {
         guard let dateString, !dateString.isEmpty else { return nil }
-        let parser = DateFormatter()
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        parser.dateFormat = "yyyy-MM-dd"
-        guard let date = parser.date(from: dateString) else { return dateString }
+        guard let date = date(from: dateString) else { return dateString }
         let output = DateFormatter()
         output.locale = Locale(identifier: "zh_CN")
         output.dateFormat = "yyyy 年 M 月 d 日"
         return output.string(from: date)
+    }
+
+    /// 播出日期的人话（v1.18 追更）：「今天」/「明天」/「3 天后」/「昨天」/ 更远或更早给「10 月 24 日」。
+    ///
+    /// 与 `relativeTime` 的区别：这里只按「天」算且允许未来时间；解析不出日期返回 nil，
+    /// 由调用方决定是否整条隐藏。
+    static func airDatePhrase(_ dateString: String?, now: Date = Date(), calendar: Calendar = .current) -> String? {
+        guard let date = date(from: dateString) else { return nil }
+        let days = calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: now),
+            to: calendar.startOfDay(for: date)
+        ).day ?? 0
+
+        switch days {
+        case 0: return "今天"
+        case 1: return "明天"
+        case 2...13: return "\(days) 天后"
+        case -1: return "昨天"
+        default: break
+        }
+
+        let output = DateFormatter()
+        output.locale = Locale(identifier: "zh_CN")
+        output.dateFormat = "M 月 d 日"
+        return output.string(from: date)
+    }
+
+    /// `yyyy-MM-dd` → `Date`（en_US_POSIX，与 TMDB 返回格式一致）。
+    static func date(from dateString: String?) -> Date? {
+        guard let dateString, !dateString.isEmpty else { return nil }
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.dateFormat = "yyyy-MM-dd"
+        return parser.date(from: dateString)
     }
 
     /// 历史页相对时间：「12:30」/「昨天 12:30」/「3 天前」/「2026 年 1 月 5 日」。

@@ -50,6 +50,26 @@ struct FormattersTests {
         #expect(Formatters.languageLabel("en-US") == "English")
     }
 
+    @Test("播出日期短语：今天 / 明天 / N 天后 / 昨天 / 更远给具体日期")
+    func airDatePhrase() {
+        let calendar = Calendar(identifier: .gregorian)
+        let now = Date(timeIntervalSince1970: 1_767_236_400) // 2026-01-01 03:00 UTC（本地当天上午）
+
+        #expect(Formatters.airDatePhrase("2026-01-01", now: now, calendar: calendar) == "今天")
+        #expect(Formatters.airDatePhrase("2026-01-02", now: now, calendar: calendar) == "明天")
+        #expect(Formatters.airDatePhrase("2026-01-04", now: now, calendar: calendar) == "3 天后")
+        #expect(Formatters.airDatePhrase("2025-12-31", now: now, calendar: calendar) == "昨天")
+
+        // 两周以外、以及早已播过的日期，直接给「M 月 d 日」，不再说相对量。
+        #expect(Formatters.airDatePhrase("2026-02-01", now: now, calendar: calendar) == "2 月 1 日")
+        #expect(Formatters.airDatePhrase("2025-11-20", now: now, calendar: calendar) == "11 月 20 日")
+
+        // 解析不出日期返回 nil，由调用方隐藏整条追更信息。
+        #expect(Formatters.airDatePhrase(nil, now: now, calendar: calendar) == nil)
+        #expect(Formatters.airDatePhrase("", now: now, calendar: calendar) == nil)
+        #expect(Formatters.airDatePhrase("下周一", now: now, calendar: calendar) == nil)
+    }
+
     @Test("相对时间：今天 / 昨天 / N 天前")
     func relativeTime() {
         let calendar = Calendar(identifier: .gregorian)

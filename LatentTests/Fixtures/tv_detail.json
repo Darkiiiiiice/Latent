@@ -60,6 +60,18 @@
     }
   ],
   "status": "Returning Series",
+  "next_episode_to_air": {
+    "air_date": "2026-01-05",
+    "episode_number": 5,
+    "id": 5551234,
+    "name": "第一章：地狱火俱乐部",
+    "overview": "全员回归。",
+    "season_number": 5,
+    "still_path": "/next.jpg",
+    "vote_average": 0,
+    "vote_count": 0,
+    "runtime": 62
+  },
   "tagline": "一个关于颠倒世界的故事",
   "vote_average": 8.6,
   "vote_count": 17234,

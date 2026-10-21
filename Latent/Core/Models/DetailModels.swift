@@ -167,6 +167,8 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
     /// 出品国家 / 地区。
     let productionCountries: [ProductionCountry]?
     let originCountry: [String]?
+    /// 下一集（v1.18「追更」）：TMDB 在未完结剧集上直接给出 `next_episode_to_air`。
+    let nextEpisodeToAir: Episode?
 
     var mediaKind: MediaKind { .tv }
     var title: String { name }
@@ -192,6 +194,7 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
         case createdBy = "created_by"
         case productionCountries = "production_countries"
         case originCountry = "origin_country"
+        case nextEpisodeToAir = "next_episode_to_air"
     }
 
     init(
@@ -206,7 +209,8 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
         numberOfEpisodes: Int? = nil, seasons: [Season]? = nil,
         episodeRunTime: [Int]? = nil, lastAirDate: String? = nil,
         networks: [Network]? = nil, createdBy: [Creator]? = nil,
-        productionCountries: [ProductionCountry]? = nil, originCountry: [String]? = nil
+        productionCountries: [ProductionCountry]? = nil, originCountry: [String]? = nil,
+        nextEpisodeToAir: Episode? = nil
     ) {
         self.id = id
         self.name = name
@@ -237,6 +241,7 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
         self.createdBy = createdBy
         self.productionCountries = productionCountries
         self.originCountry = originCountry
+        self.nextEpisodeToAir = nextEpisodeToAir
     }
 
     init(from decoder: any Decoder) throws {
@@ -274,12 +279,34 @@ struct TVShowDetail: MediaDetail, Decodable, Sendable {
         self.createdBy = (try? container.decodeIfPresent([Creator].self, forKey: .createdBy)) ?? nil
         self.productionCountries = (try? container.decodeIfPresent([ProductionCountry].self, forKey: .productionCountries)) ?? nil
         self.originCountry = (try? container.decodeIfPresent([String].self, forKey: .originCountry)) ?? nil
+        self.nextEpisodeToAir = (try? container.decodeIfPresent(Episode.self, forKey: .nextEpisodeToAir)) ?? nil
+    }
+
+    /// TMDB `status` 是英文枚举（v1.18）：界面其余部分是中文，这里翻译一道；
+    /// 出现未知取值时原样显示，不吞信息。
+    var statusLabel: String? {
+        guard let status, !status.isEmpty else { return nil }
+        switch status {
+        case "Returning Series": return "连载中"
+        case "Ended": return "已完结"
+        case "Canceled": return "已取消"
+        case "In Production": return "制作中"
+        case "Planned": return "计划中"
+        case "Pilot": return "试播"
+        default: return status
+        }
+    }
+
+    /// 是否已停更 / 完结（决定追更条要不要显示「已完结」）。
+    var hasEnded: Bool {
+        guard let status else { return false }
+        return status == "Ended" || status == "Canceled"
     }
 
     /// 事实栏行（剧集：状态 / 首播 / 季数 / 集数 / 最近播出 / 语言）。
     var facts: [(label: String, value: String)] {
         var rows: [(label: String, value: String)] = []
-        if let status { rows.append((label: "状态", value: status)) }
+        if let statusLabel { rows.append((label: "状态", value: statusLabel)) }
         if let date = Formatters.fullDate(firstAirDate) { rows.append((label: "首播", value: date)) }
         if let seasons = numberOfSeasons { rows.append((label: "季数", value: "\(seasons)")) }
         if let episodes = numberOfEpisodes { rows.append((label: "集数", value: "\(episodes)")) }

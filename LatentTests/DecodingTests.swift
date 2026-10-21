@@ -100,6 +100,33 @@ struct DecodingTests {
         #expect(detail.watchProviders?.region(for: nil)?.code == "US")
     }
 
+    @Test("剧集追更：next_episode_to_air 与状态中文化")
+    func tvNextEpisode() throws {
+        let detail = try decoder.decode(TVShowDetail.self, from: Fixtures.data("tv_detail"))
+        let next = try #require(detail.nextEpisodeToAir)
+        #expect(next.airDate == "2026-01-05")
+        #expect(next.seasonNumber == 5)
+        #expect(next.episodeNumber == 5)
+        #expect(next.displayName == "第一章：地狱火俱乐部")
+
+        // 状态在 UI 里说中文；未知取值原样保留。
+        #expect(detail.statusLabel == "连载中")
+        #expect(detail.hasEnded == false)
+        #expect(detail.facts.first?.value == "连载中")
+    }
+
+    @Test("剧集追更：缺 next_episode_to_air 不报错")
+    func tvWithoutNextEpisode() throws {
+        // movie_detail.json 里没有该字段；换成 TV 端点数据的最小形态验证可选性。
+        let json = """
+        {"id": 1, "name": "无下一集", "status": "Ended", "number_of_seasons": 2, "number_of_episodes": 18}
+        """
+        let detail = try decoder.decode(TVShowDetail.self, from: Data(json.utf8))
+        #expect(detail.nextEpisodeToAir == nil)
+        #expect(detail.statusLabel == "已完结")
+        #expect(detail.hasEnded)
+    }
+
     @Test("观看平台：地区排序、跳过空地区、分组去重")
     func watchProviders() throws {
         let detail = try decoder.decode(MovieDetail.self, from: Fixtures.data("movie_detail"))

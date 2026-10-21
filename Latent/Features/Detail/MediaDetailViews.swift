@@ -97,6 +97,7 @@ struct TVShowDetailView: View {
             reload: { await load() },
             receiptAction: show == nil ? nil : { showsReceipt = true },
             extraContent: { detail in
+                airingSection(detail)
                 seasonSection(detail)
             }
         ) { detail in
@@ -114,6 +115,92 @@ struct TVShowDetailView: View {
         ForEach(detail.facts, id: \.label) { row in
             FactRow(label: row.label, value: row.value)
         }
+    }
+
+    /// 追更（v1.18，设计文档第 8.6 节）：未完结的剧显示下一集与播出时间；
+    /// 已完结 / 已取消的剧显示季集总数。两者都不满足时整段不出现。
+    @ViewBuilder
+    private func airingSection(_ detail: TVShowDetail) -> some View {
+        if let next = detail.nextEpisodeToAir {
+            airingRow(
+                icon: "calendar.badge.clock",
+                label: "下一集",
+                primary: episodeLabel(next),
+                trailing: Formatters.airDatePhrase(next.airDate) ?? "待定",
+                emphasized: true,
+                hint: Formatters.fullDate(next.airDate).map { "\($0) 播出" }
+            )
+        } else if detail.hasEnded {
+            airingRow(
+                icon: "checkmark.circle",
+                label: detail.statusLabel ?? "已完结",
+                primary: episodeTotals(detail),
+                trailing: nil,
+                emphasized: false,
+                hint: nil
+            )
+        }
+    }
+
+    /// 「第 2 季第 5 集 · 标题」；集名缺省或与集号重复时只留集号。
+    private func episodeLabel(_ episode: Episode) -> String {
+        var parts: [String] = []
+        if let season = episode.seasonNumber, season > 0 { parts.append("第 \(season) 季") }
+        if episode.episodeNumber > 0 { parts.append("第 \(episode.episodeNumber) 集") }
+        let index = parts.joined()
+
+        let name = episode.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let name, !name.isEmpty else { return index.isEmpty ? episode.displayName : index }
+        return index.isEmpty ? name : "\(index) · \(name)"
+    }
+
+    /// 「共 4 季 34 集」——任一数字缺失就省略对应部分；都没有则返回空串（由调用方整行隐藏）。
+    private func episodeTotals(_ detail: TVShowDetail) -> String {
+        var parts: [String] = []
+        if let seasons = detail.numberOfSeasons, seasons > 0 { parts.append("共 \(seasons) 季") }
+        if let episodes = detail.numberOfEpisodes, episodes > 0 { parts.append("\(episodes) 集") }
+        return parts.joined(separator: " ")
+    }
+
+    private func airingRow(
+        icon: String,
+        label: String,
+        primary: String,
+        trailing: String?,
+        emphasized: Bool,
+        hint: String?
+    ) -> some View {
+        HStack(spacing: UI.Spacing.s2) {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .foregroundStyle(emphasized ? UI.Palette.accent : UI.Palette.textSecondary)
+
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .kerning(0.4)
+                .foregroundStyle(UI.Palette.textSecondary)
+
+            if !primary.isEmpty {
+                Text(primary)
+                    .font(.system(size: 13, weight: emphasized ? .medium : .regular))
+                    .foregroundStyle(UI.Palette.textPrimary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: UI.Spacing.s2)
+
+            if let trailing {
+                Text(trailing)
+                    .font(.system(size: 12, weight: emphasized ? .medium : .regular))
+                    .foregroundStyle(emphasized ? UI.Palette.accent : UI.Palette.textSecondary)
+            }
+        }
+        .padding(.horizontal, UI.Spacing.s3)
+        .padding(.vertical, UI.Spacing.s2)
+        .background(UI.Palette.surface, in: RoundedRectangle(cornerRadius: UI.Radius.button, style: .continuous))
+        .hairlineBorder(UI.Palette.border, radius: UI.Radius.button)
+        .help(hint ?? "")
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
