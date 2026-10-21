@@ -68,6 +68,44 @@ struct EndpointTests {
         #expect(tvItems.contains { $0.name == "first_air_date.gte" && $0.value == "2020-01-01" })
     }
 
+    @Test("发现端点：评分上限与观看平台（平台必须带地区）")
+    func discoverRatingAndProviders() {
+        var query = DiscoverQuery()
+        query.minRating = 7.0
+        query.maxRating = 8.5
+        query.providerIDs = [8, 337]
+        query.region = "CN"
+
+        let url = EndpointURLBuilder.url(for: .discover(mediaKind: .movie, query: query, page: 1), language: "zh-CN")
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
+
+        #expect(items.contains { $0.name == "vote_average.gte" && $0.value == "7.0" })
+        #expect(items.contains { $0.name == "vote_average.lte" && $0.value == "8.5" })
+        // 平台 ID 按数值排序；`URLComponents` 会把并集分隔符 `|` 百分号编码（服务端照常解码）。
+        #expect(items.contains { $0.name == "with_watch_providers" && $0.value?.removingPercentEncoding == "8|337" })
+        #expect(items.contains { $0.name == "watch_region" && $0.value == "CN" })
+        #expect(items.contains { $0.name == "with_watch_monetization_types" && $0.value?.removingPercentEncoding == "flatrate|free|ads" })
+
+        // 未选平台时不应带地区（TMDB 要求两者同时出现）。
+        var bare = DiscoverQuery()
+        bare.region = "CN"
+        let bareURL = EndpointURLBuilder.url(for: .discover(mediaKind: .movie, query: bare, page: 1), language: "zh-CN")
+        let bareItems = URLComponents(url: bareURL, resolvingAgainstBaseURL: false)!.queryItems!
+        #expect(!bareItems.contains { $0.name == "watch_region" })
+        #expect(!bareItems.contains { $0.name == "with_watch_providers" })
+    }
+
+    @Test("平台清单端点：路径与 watch_region")
+    func watchProvidersEndpoint() {
+        let movieURL = EndpointURLBuilder.url(for: .watchProviders(mediaKind: .movie, region: "CN"), language: "zh-CN")
+        #expect(movieURL.path == "/3/watch/providers/movie")
+        let items = URLComponents(url: movieURL, resolvingAgainstBaseURL: false)!.queryItems!
+        #expect(items.contains { $0.name == "watch_region" && $0.value == "CN" })
+        #expect(items.contains { $0.name == "language" && $0.value == "zh-CN" })
+
+        #expect(EndpointURLBuilder.url(for: .watchProviders(mediaKind: .tv, region: "US"), language: "zh-CN").path == "/3/watch/providers/tv")
+    }
+
     @Test("季详情与类型列表路径")
     func seasonAndGenrePaths() {
         #expect(EndpointURLBuilder.url(for: .tvSeason(id: 66732, seasonNumber: 2), language: "zh-CN").path == "/3/tv/66732/season/2")
@@ -102,5 +140,66 @@ struct CacheKeyTests {
         let small = CacheKey.imageKey(path: "/abc.jpg", pixelSize: 185)
         let large = CacheKey.imageKey(path: "/abc.jpg", pixelSize: 1280)
         #expect(small != large)
+    }
+}
+
+/// 发现页筛选条件与快捷入口。
+@Suite("发现页筛选")
+struct DiscoverQueryTests {
+
+    @Test("isEmpty：只认真正收窄结果的条件，单独改地区不算")
+    func isEmpty() {
+        var query = DiscoverQuery()
+        #expect(query.isEmpty)
+
+        query.region = "US"
+        #expect(query.isEmpty) // 未选平台时地区不参与请求
+
+        query.providerIDs = [8]
+        #expect(!query.isEmpty)
+
+        query.providerIDs = []
+        query.maxRating = 8.0
+        #expect(!query.isEmpty)
+    }
+
+    @Test("摘要文本：类型 → 年份 → 评分 → 平台，全空回退排序名")
+    func summaryLabel() {
+        var query = DiscoverQuery()
+        #expect(query.summaryLabel() == "人气")
+
+        query.genreIDs = [878, 12]
+        query.yearFrom = 2010
+        query.yearTo = 2024
+        query.maxRating = 7.0
+        query.providerIDs = [8]
+
+        let label = query.summaryLabel(genreNames: [878: "科幻", 12: "冒险"], providerNames: [8: "Netflix"])
+        #expect(label == "冒险+科幻 · 2010–2024 · 评分 ≤7.0 · Netflix")
+
+        // 查不到中文名时回退为「平台 N 个」，不显示数字 ID。
+        var unknown = DiscoverQuery()
+        unknown.providerIDs = [8, 337]
+        #expect(unknown.summaryLabel() == "平台 2 个")
+    }
+
+    @Test("快捷入口：UUID 与查询条件经 JSON 往返不丢失")
+    func presetRoundTrip() throws {
+        var query = DiscoverQuery()
+        query.genreIDs = [878]
+        query.minRating = 7.0
+        query.maxRating = 9.0
+        query.providerIDs = [8, 337]
+        query.region = "HK"
+        query.sortBy = .rating
+        let preset = DiscoverPreset(name: "科幻高分", mediaKind: .tv, query: query)
+
+        let data = try JSONEncoder().encode(preset)
+        let decoded = try JSONDecoder().decode(DiscoverPreset.self, from: data)
+
+        #expect(decoded == preset)
+        #expect(decoded.mediaKind == .tv)
+        #expect(decoded.query.region == "HK")
+        #expect(decoded.query.sortBy == .rating)
     }
 }

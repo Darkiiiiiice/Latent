@@ -347,6 +347,38 @@ struct AppSettingsTests {
         let reloaded = AppSettings(defaults: defaults, environment: ["https_proxy": "http://127.0.0.1:9999"])
         #expect(reloaded.proxy.mode == .system) // 不再被环境变量覆盖
     }
+
+    @Test("发现页快捷入口：同名覆盖、上限 12 条、可删除并持久化")
+    func discoverPresets() {
+        let defaults = UserDefaults(suiteName: "latent-tests-\(UUID().uuidString)")!
+        let settings = AppSettings(defaults: defaults)
+
+        var query = DiscoverQuery()
+        query.minRating = 7.0
+        settings.saveDiscoverFilter(DiscoverPreset(name: "高分", mediaKind: .movie, query: query))
+        #expect(settings.savedDiscoverFilters.map(\.name) == ["高分"])
+
+        // 同名覆盖：不新增条目，条件被替换。
+        query.minRating = 8.0
+        settings.saveDiscoverFilter(DiscoverPreset(name: "高分", mediaKind: .movie, query: query))
+        #expect(settings.savedDiscoverFilters.count == 1)
+        #expect(settings.savedDiscoverFilters.first?.query.minRating == 8.0)
+
+        for index in 1...14 {
+            settings.saveDiscoverFilter(DiscoverPreset(name: "预设 \(index)", mediaKind: .tv, query: DiscoverQuery()))
+        }
+        #expect(settings.savedDiscoverFilters.count == AppSettings.discoverPresetsLimit)
+        #expect(settings.savedDiscoverFilters.first?.name == "预设 14")
+
+        // 重新读取：持久化生效。
+        let reloaded = AppSettings(defaults: defaults)
+        #expect(reloaded.savedDiscoverFilters == settings.savedDiscoverFilters)
+
+        let removed = reloaded.savedDiscoverFilters[0]
+        reloaded.removeDiscoverFilter(id: removed.id)
+        #expect(!reloaded.savedDiscoverFilters.contains { $0.id == removed.id })
+        #expect(AppSettings(defaults: defaults).savedDiscoverFilters.count == AppSettings.discoverPresetsLimit - 1)
+    }
 }
 
 /// 「来一部」随机挑选。

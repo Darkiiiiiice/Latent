@@ -22,6 +22,8 @@ enum Endpoint: Sendable, Hashable {
     case discover(mediaKind: MediaKind, query: DiscoverQuery, page: Int)
     /// GET /3/genre/{movie,tv}/list
     case genreList(mediaKind: MediaKind)
+    /// GET /3/watch/providers/{movie,tv}?watch_region=…
+    case watchProviders(mediaKind: MediaKind, region: String)
 
     enum TrendingWindow: String, Sendable, CaseIterable, Hashable {
         case day
@@ -57,13 +59,15 @@ enum Endpoint: Sendable, Hashable {
             return "/3/discover/\(mediaKind == .tv ? "tv" : "movie")"
         case .genreList(let mediaKind):
             return "/3/genre/\(mediaKind == .tv ? "tv" : "movie")/list"
+        case .watchProviders(let mediaKind, _):
+            return "/3/watch/providers/\(mediaKind == .tv ? "tv" : "movie")"
         }
     }
 
     /// 响应缓存 TTL（设计文档第 4 节「缓存」）。
     var cacheMaxAge: TimeInterval {
         switch self {
-        case .configuration, .genreList:
+        case .configuration, .genreList, .watchProviders:
             return CacheTTL.settings
         case .trending:
             return CacheTTL.trending
@@ -118,7 +122,7 @@ enum Endpoint: Sendable, Hashable {
                 URLQueryItem(name: "include_adult", value: "false"),
             ]
             if !query.genreIDs.isEmpty {
-                items.append(URLQueryItem(name: "with_genres", value: query.genreIDs.map(String.init).sorted().joined(separator: ",")))
+                items.append(URLQueryItem(name: "with_genres", value: query.genreIDs.sorted().map(String.init).joined(separator: ",")))
             }
             if let yearFrom = query.yearFrom {
                 items.append(URLQueryItem(name: "\(dateField).gte", value: "\(yearFrom)-01-01"))
@@ -130,9 +134,24 @@ enum Endpoint: Sendable, Hashable {
                 items.append(URLQueryItem(name: "vote_average.gte", value: String(format: "%.1f", minRating)))
                 items.append(URLQueryItem(name: "vote_count.gte", value: "50"))
             }
+            if let maxRating = query.maxRating {
+                items.append(URLQueryItem(name: "vote_average.lte", value: String(format: "%.1f", maxRating)))
+            }
+            if !query.providerIDs.isEmpty {
+                // TMDB 要求 `with_watch_providers` 必须与 `watch_region` 同时出现；
+                // 多个平台用 `|` 表示并集（`,` 是交集）。
+                items.append(URLQueryItem(name: "with_watch_providers", value: query.providerIDs.sorted().map(String.init).joined(separator: "|")))
+                items.append(URLQueryItem(name: "watch_region", value: query.region))
+                items.append(URLQueryItem(name: "with_watch_monetization_types", value: "flatrate|free|ads"))
+            }
             return items
         case .genreList:
             return [URLQueryItem(name: "language", value: language)]
+        case .watchProviders(_, let region):
+            return [
+                URLQueryItem(name: "language", value: language),
+                URLQueryItem(name: "watch_region", value: region),
+            ]
         }
     }
 }

@@ -13,14 +13,20 @@ enum CacheTTL {
 }
 
 /// 发现页筛选条件（GET /3/discover/movie、/3/discover/tv）。
-struct DiscoverQuery: Sendable, Equatable, Hashable {
+struct DiscoverQuery: Codable, Sendable, Equatable, Hashable {
     var genreIDs: Set<Int> = []
     var yearFrom: Int?
     var yearTo: Int?
     var minRating: Double?
+    /// 评分上限（含）。
+    var maxRating: Double?
+    /// 流媒体平台（TMDB `provider_id`，多选取并集）。
+    var providerIDs: Set<Int> = []
+    /// 观看地区（ISO 3166-1 alpha-2）；平台可用性按地区划分，随筛选一起保存。
+    var region: String = DiscoverQuery.defaultRegion
     var sortBy: SortBy = .popularity
 
-    enum SortBy: String, CaseIterable, Sendable, Hashable {
+    enum SortBy: String, Codable, CaseIterable, Sendable, Hashable {
         case popularity = "popularity.desc"
         case rating = "vote_average.desc"
         case newest = "primary_release_date.desc"
@@ -38,10 +44,71 @@ struct DiscoverQuery: Sendable, Equatable, Hashable {
         }
     }
 
+    /// 是否设置了「会真正收窄结果」的条件。
+    ///
+    /// 观看地区不算条件——它只在选择了平台时才参与请求，单独改地区不改变结果集。
     var isEmpty: Bool {
-        genreIDs.isEmpty && yearFrom == nil && yearTo == nil && minRating == nil
+        genreIDs.isEmpty && yearFrom == nil && yearTo == nil
+            && minRating == nil && maxRating == nil && providerIDs.isEmpty
+    }
+
+    // MARK: - 观看地区（TMDB `watch_region`）
+
+    static let defaultRegion = "CN"
+
+    /// 平台可用性按地区划分；这里只列常见地区，中文名由 `CountryDirectory` 提供。
+    static let regions: [String] = [
+        "CN", "HK", "TW", "JP", "KR", "SG", "US", "GB", "CA", "AU", "DE", "FR"
+    ]
+
+    // MARK: - 摘要文本
+
+    /// 「电影 · 科幻+动作 · 2010–2024 · 评分 ≤7.0 · 平台 2 个」——保存快捷入口时的默认名字。
+    ///
+    /// 类型与平台的中文名由调用方查表传入（两者都依赖当前已加载的列表）。
+    func summaryLabel(genreNames: [Int: String] = [:], providerNames: [Int: String] = [:]) -> String {
+        var parts: [String] = []
+
+        if !genreIDs.isEmpty {
+            let names = genreIDs.sorted().map { genreNames[$0] ?? "类型\($0)" }
+            parts.append(names.joined(separator: "+"))
+        }
+
+        switch (yearFrom, yearTo) {
+        case let (from?, to?): parts.append("\(from)–\(to)")
+        case let (from?, nil): parts.append("\(from) 年后")
+        case let (nil, to?): parts.append("\(to) 年前")
+        case (nil, nil): break
+        }
+
+        switch (minRating, maxRating) {
+        case let (min?, max?): parts.append("评分 \(min)–\(max)")
+        case let (min?, nil): parts.append("评分 ≥\(min)")
+        case let (nil, max?): parts.append("评分 ≤\(max)")
+        case (nil, nil): break
+        }
+
+        if !providerIDs.isEmpty {
+            let names = providerIDs.sorted().compactMap { providerNames[$0] }
+            parts.append(names.isEmpty ? "平台 \(providerIDs.count) 个" : names.joined(separator: "+"))
+        }
+
+        if parts.isEmpty {
+            parts.append(sortBy.label)
+        }
+        return parts.joined(separator: " · ")
     }
 }
+
+/// 发现页筛选快捷入口（UserDefaults 持久化，见 `AppSettings`）。
+struct DiscoverPreset: Codable, Sendable, Hashable, Identifiable {
+    var id: UUID = UUID()
+    var name: String
+    var mediaKind: MediaKind
+    var query: DiscoverQuery
+    var createdAt: Date = Date()
+}
+
 
 /// GET /3/configuration 的图片配置。
 struct APIConfiguration: Codable, Sendable, Hashable {

@@ -11,6 +11,7 @@ protocol TMDBClientProtocol: Sendable {
     func personDetail(id: Int) async throws -> PersonDetail
     func discover(mediaKind: MediaKind, query: DiscoverQuery, page: Int) async throws -> Paged<MediaSummary>
     func genreList(mediaKind: MediaKind) async throws -> [Genre]
+    func watchProviders(mediaKind: MediaKind, region: String) async throws -> [WatchProvider]
 }
 
 extension TMDBClient {
@@ -39,6 +40,7 @@ struct MockTMDBClient: TMDBClientProtocol {
     var person: PersonDetail = .sample
     var discoverPage = Paged(page: 1, items: MediaSummary.samples(count: 18, kind: .movie), totalPages: 2, totalResults: 36)
     var genres: [Genre] = Genre.samples
+    var providers: [WatchProvider] = WatchProvider.samples
 
     func validateToken() async throws -> APIConfiguration { configuration }
     func trending(mediaKind: MediaKind, window: Endpoint.TrendingWindow, page: Int) async throws -> Paged<MediaSummary> { trendingPage }
@@ -49,6 +51,7 @@ struct MockTMDBClient: TMDBClientProtocol {
     func personDetail(id: Int) async throws -> PersonDetail { person }
     func discover(mediaKind: MediaKind, query: DiscoverQuery, page: Int) async throws -> Paged<MediaSummary> { discoverPage }
     func genreList(mediaKind: MediaKind) async throws -> [Genre] { genres }
+    func watchProviders(mediaKind: MediaKind, region: String) async throws -> [WatchProvider] { providers }
 
     static var sampleSearchResults: [SearchResult] {
         [
@@ -96,6 +99,14 @@ extension Genre {
         Genre(id: 28, name: "动作"), Genre(id: 12, name: "冒险"),
         Genre(id: 878, name: "科幻"), Genre(id: 18, name: "剧情"),
         Genre(id: 35, name: "喜剧"), Genre(id: 9648, name: "悬疑"),
+    ]
+}
+
+extension WatchProvider {
+    static let samples: [WatchProvider] = [
+        WatchProvider(providerID: 8, providerName: "Netflix", logoPath: "/netflix.jpg", displayPriority: 0),
+        WatchProvider(providerID: 337, providerName: "Disney+", logoPath: "/disney.jpg", displayPriority: 1),
+        WatchProvider(providerID: 1899, providerName: "HBO Max", logoPath: "/hbo.jpg", displayPriority: 2),
     ]
 }
 

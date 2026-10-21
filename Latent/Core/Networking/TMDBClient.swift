@@ -133,6 +133,11 @@ actor TMDBClient: TMDBClientProtocol {
         return response.genres
     }
 
+    func watchProviders(mediaKind: MediaKind, region: String) async throws -> [WatchProvider] {
+        let response: WatchProviderListResponse = try await fetch(.watchProviders(mediaKind: mediaKind, region: region))
+        return response.results.sorted { ($0.displayPriority ?? .max, $0.providerID) < ($1.displayPriority ?? .max, $1.providerID) }
+    }
+
     // MARK: - 请求管线
 
     private func fetch<T: Decodable & Sendable>(_ endpoint: Endpoint) async throws -> T {

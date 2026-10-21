@@ -179,3 +179,22 @@ struct WatchProvider: Decodable, Sendable, Identifiable, Hashable {
         self.displayPriority = (try? container.decodeIfPresent(Int.self, forKey: .displayPriority)) ?? nil
     }
 }
+
+/// GET /3/watch/providers/{movie,tv}?watch_region=… 的响应：该地区可用的平台清单。
+///
+/// 与详情页的 `WatchProviders`（按地区给某部作品的渠道）不同——这里是「某地区有哪些平台」，
+/// 用于发现页的平台筛选。数据由 JustWatch 提供，界面保留来源说明（设计文档第 4 节）。
+struct WatchProviderListResponse: Decodable, Sendable {
+    let results: [WatchProvider]
+
+    private enum CodingKeys: String, CodingKey { case results }
+
+    init(results: [WatchProvider] = []) {
+        self.results = results
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.results = (try? container.decodeIfPresent([WatchProvider].self, forKey: .results)) ?? []
+    }
+}

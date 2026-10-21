@@ -3,7 +3,7 @@ import Foundation
 /// 作品类型（本应用可导航实体的统一标识：电影 / 剧集 / 人物）。
 ///
 /// 未知值兜底为 `.unknown`（TMDB 字段变化不导致解码失败），与设计文档第 4 节一致。
-enum MediaKind: String, Decodable, Sendable, CaseIterable, Hashable {
+enum MediaKind: String, Codable, Sendable, CaseIterable, Hashable {
     case movie
     case tv
     case person

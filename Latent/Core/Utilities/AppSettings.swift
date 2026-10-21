@@ -14,10 +14,13 @@ final class AppSettings {
         static let appearance = "settings.appearance"
         static let maxImageCacheMB = "settings.maxImageCacheMB"
         static let recentSearches = "settings.recentSearches"
+        static let discoverPresets = "settings.discoverPresets"
     }
 
     static let availableLanguages = ["zh-CN", "en-US"]
     static let recentSearchesLimit = 10
+    /// 发现页快捷入口上限（超出丢弃最早的）。
+    static let discoverPresetsLimit = 12
 
     private let defaults: UserDefaults
 
@@ -58,6 +61,9 @@ final class AppSettings {
 
     private(set) var recentSearches: [String]
 
+    /// 发现页筛选快捷入口（新 → 旧）。
+    private(set) var savedDiscoverFilters: [DiscoverPreset]
+
     init(defaults: UserDefaults = .standard, environment: [String: String]? = nil) {
         self.defaults = defaults
         let storedLanguage = defaults.string(forKey: Keys.language) ?? "zh-CN"
@@ -74,6 +80,7 @@ final class AppSettings {
             self.proxy = ProxyConfiguration()
         }
         self.recentSearches = defaults.stringArray(forKey: Keys.recentSearches) ?? []
+        self.savedDiscoverFilters = AppSettings.readPresets(from: defaults)
         self.languageStorage.write(resolved)
     }
 
@@ -120,5 +127,39 @@ final class AppSettings {
     func clearRecentSearches() {
         recentSearches = []
         defaults.removeObject(forKey: Keys.recentSearches)
+    }
+
+    // MARK: - 发现页快捷入口
+
+    /// 保存当前筛选；同名会覆盖并提到最前，超过上限时丢弃最早的一条。
+    func saveDiscoverFilter(_ preset: DiscoverPreset) {
+        var list = savedDiscoverFilters
+        list.removeAll { $0.name.caseInsensitiveCompare(preset.name) == .orderedSame }
+        list.insert(preset, at: 0)
+        if list.count > Self.discoverPresetsLimit {
+            list = Array(list.prefix(Self.discoverPresetsLimit))
+        }
+        savedDiscoverFilters = list
+        AppSettings.writePresets(list, to: defaults)
+    }
+
+    func removeDiscoverFilter(id: UUID) {
+        savedDiscoverFilters.removeAll { $0.id == id }
+        AppSettings.writePresets(savedDiscoverFilters, to: defaults)
+    }
+
+    /// 读取失败（字段缺失 / 版本变化）时按空列表处理，不抛错也不丢弃其余条目。
+    private static func readPresets(from defaults: UserDefaults) -> [DiscoverPreset] {
+        guard let data = defaults.data(forKey: Keys.discoverPresets) else { return [] }
+        return (try? JSONDecoder().decode([DiscoverPreset].self, from: data)) ?? []
+    }
+
+    private static func writePresets(_ presets: [DiscoverPreset], to defaults: UserDefaults) {
+        guard !presets.isEmpty else {
+            defaults.removeObject(forKey: Keys.discoverPresets)
+            return
+        }
+        guard let data = try? JSONEncoder().encode(presets) else { return }
+        defaults.set(data, forKey: Keys.discoverPresets)
     }
 }
