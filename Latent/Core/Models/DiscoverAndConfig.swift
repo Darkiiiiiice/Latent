@@ -24,6 +24,8 @@ struct DiscoverQuery: Codable, Sendable, Equatable, Hashable {
     var providerIDs: Set<Int> = []
     /// 观看地区（ISO 3166-1 alpha-2）；平台可用性按地区划分，随筛选一起保存。
     var region: String = DiscoverQuery.defaultRegion
+    /// 时长上限（分钟，含）。TMDB 只对电影支持 `with_runtime`，剧集侧忽略此条件。
+    var maxRuntime: Int?
     var sortBy: SortBy = .popularity
 
     enum SortBy: String, Codable, CaseIterable, Sendable, Hashable {
@@ -42,6 +44,15 @@ struct DiscoverQuery: Codable, Sendable, Equatable, Hashable {
             case .revenue: return "票房"
             }
         }
+
+        /// 请求用的排序值：电影按上映日期，剧集端点对应的字段是首播日期。
+        func rawValue(for mediaKind: MediaKind) -> String {
+            switch (self, mediaKind) {
+            case (.newest, .tv): return "first_air_date.desc"
+            case (.oldest, .tv): return "first_air_date.asc"
+            default: return rawValue
+            }
+        }
     }
 
     /// 是否设置了「会真正收窄结果」的条件。
@@ -50,6 +61,7 @@ struct DiscoverQuery: Codable, Sendable, Equatable, Hashable {
     var isEmpty: Bool {
         genreIDs.isEmpty && yearFrom == nil && yearTo == nil
             && minRating == nil && maxRating == nil && providerIDs.isEmpty
+            && maxRuntime == nil
     }
 
     // MARK: - 观看地区（TMDB `watch_region`）
@@ -91,6 +103,10 @@ struct DiscoverQuery: Codable, Sendable, Equatable, Hashable {
         if !providerIDs.isEmpty {
             let names = providerIDs.sorted().compactMap { providerNames[$0] }
             parts.append(names.isEmpty ? "平台 \(providerIDs.count) 个" : names.joined(separator: "+"))
+        }
+
+        if let maxRuntime {
+            parts.append("≤\(maxRuntime) 分钟")
         }
 
         if parts.isEmpty {

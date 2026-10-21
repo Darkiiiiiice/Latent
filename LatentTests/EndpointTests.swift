@@ -95,6 +95,39 @@ struct EndpointTests {
         #expect(!bareItems.contains { $0.name == "with_watch_providers" })
     }
 
+    @Test("发现端点：时长上限只对电影下发，上映日期排序在剧集换成首播日期")
+    func discoverRuntimeAndTVSort() {
+        var query = DiscoverQuery()
+        query.maxRuntime = 90
+
+        let movieItems = URLComponents(
+            url: EndpointURLBuilder.url(for: .discover(mediaKind: .movie, query: query, page: 1), language: "zh-CN"),
+            resolvingAgainstBaseURL: false
+        )!.queryItems!
+        #expect(movieItems.contains { $0.name == "with_runtime.lte" && $0.value == "90" })
+
+        // 剧集端点没有 `with_runtime` 参数。
+        let tvItems = URLComponents(
+            url: EndpointURLBuilder.url(for: .discover(mediaKind: .tv, query: query, page: 1), language: "zh-CN"),
+            resolvingAgainstBaseURL: false
+        )!.queryItems!
+        #expect(!tvItems.contains { $0.name == "with_runtime.lte" })
+
+        query.maxRuntime = nil
+        query.sortBy = .newest
+        let tvSorted = URLComponents(
+            url: EndpointURLBuilder.url(for: .discover(mediaKind: .tv, query: query, page: 1), language: "zh-CN"),
+            resolvingAgainstBaseURL: false
+        )!.queryItems!
+        #expect(tvSorted.contains { $0.name == "sort_by" && $0.value == "first_air_date.desc" })
+
+        let movieSorted = URLComponents(
+            url: EndpointURLBuilder.url(for: .discover(mediaKind: .movie, query: query, page: 1), language: "zh-CN"),
+            resolvingAgainstBaseURL: false
+        )!.queryItems!
+        #expect(movieSorted.contains { $0.name == "sort_by" && $0.value == "primary_release_date.desc" })
+    }
+
     @Test("平台清单端点：路径与 watch_region")
     func watchProvidersEndpoint() {
         let movieURL = EndpointURLBuilder.url(for: .watchProviders(mediaKind: .movie, region: "CN"), language: "zh-CN")
@@ -203,3 +236,128 @@ struct DiscoverQueryTests {
         #expect(decoded.query.sortBy == .rating)
     }
 }
+
+/// 一句话筛选：本地规则解析（`NLQueryParser`）。
+@Suite("一句话筛选")
+struct NLQueryParserTests {
+
+    private let genres = Genre.samples
+    private let providers = WatchProvider.samples
+
+    private func parse(_ text: String, base: DiscoverQuery = DiscoverQuery(), mediaKind: MediaKind = .movie) -> NLQueryParser.Result {
+        NLQueryParser.parse(text, genres: genres, providers: providers, base: base, mediaKind: mediaKind)
+    }
+
+    @Test("「90 分钟以内的科幻片」→ 科幻 + 时长上限 90")
+    func runtimeAndGenre() {
+        let result = parse("90 分钟以内的科幻片")
+        #expect(result.query.genreIDs == [878])
+        #expect(result.query.maxRuntime == 90)
+        #expect(result.mediaKind == nil)
+        #expect(result.matched == ["科幻", "≤90 分钟"])
+    }
+
+    @Test("「评分 8 分以上的 2020 年后动作片」→ 类型 + 年份 + 评分下限")
+    func ratingAndYear() {
+        let result = parse("评分 8 分以上的 2020 年后动作片")
+        #expect(result.query.genreIDs == [28])
+        #expect(result.query.yearFrom == 2020)
+        #expect(result.query.yearTo == nil)
+        #expect(result.query.minRating == 8.0)
+        #expect(result.matched == ["动作", "2020 年后", "评分 ≥8"])
+    }
+
+    @Test("「高低分」写法：高分给下限，低于 6 分给上限")
+    func looseRatingPhrases() {
+        #expect(parse("高分的科幻片").query.minRating == 7.5)
+        #expect(parse("低于 6 分的喜剧").query.maxRating == 6.0)
+    }
+
+    @Test("年份：年代区间与四位数区间")
+    func yearForms() {
+        let decade = parse("90 年代的老片")
+        #expect(decade.query.yearFrom == 1990)
+        #expect(decade.query.yearTo == 1999)
+        // 「老片」同时被识别为排序偏好，这不冲突。
+        #expect(decade.query.sortBy == .oldest)
+
+        let range = parse("2020-2024 的悬疑片")
+        #expect(range.query.genreIDs == [9648])
+        #expect(range.query.yearFrom == 2020)
+        #expect(range.query.yearTo == 2024)
+    }
+
+    @Test("时长：中文数字与小时换算")
+    func runtimeForms() {
+        #expect(parse("两小时以内").query.maxRuntime == 120)
+        #expect(parse("一个半小时").query.maxRuntime == 90)
+        #expect(parse("100 分钟以内的电影").query.maxRuntime == 100)
+    }
+
+    @Test("「5 分钟以内」不得被当成评分区间")
+    func runtimeIsNotRating() {
+        let result = parse("5 分钟以内")
+        #expect(result.query.minRating == nil)
+        #expect(result.query.maxRating == nil)
+    }
+
+    @Test("平台：英文名与中文别名都能命中")
+    func providerNames() {
+        // 中文别名经 `providerAliases` 映射到英文名后再匹配已加载清单。
+        let alias = parse("网飞上的科幻片", mediaKind: .movie)
+        #expect(alias.query.providerIDs == [8])
+
+        let extra = [WatchProvider(providerID: 169, providerName: "iQIYI", logoPath: nil, displayPriority: 1)]
+        let chinese = NLQueryParser.parse("爱奇艺的喜剧", genres: genres, providers: extra)
+        #expect(chinese.query.providerIDs == [169])
+    }
+
+    @Test("排序：高分 → 评分最高；剧集句子里点名作品类型")
+    func sortAndMediaKind() {
+        let high = parse("高分最新的")
+        #expect(high.query.minRating == 7.5)
+        #expect(high.query.sortBy == .rating)
+
+        let tv = parse("近年的高分剧集")
+        #expect(tv.mediaKind == .tv)
+        #expect(tv.query.sortBy == .rating)
+
+        // 剧集不支持按时长筛选，命中说明里会点出来。
+        let tvRuntime = parse("90 分钟以内的剧集")
+        #expect(tvRuntime.mediaKind == .tv)
+        #expect(tvRuntime.query.maxRuntime == 90)
+        #expect(tvRuntime.matched.contains { $0.contains("剧集不支持") })
+    }
+
+    @Test("未提及的条件保持 base 值不变")
+    func keepsBase() {
+        var base = DiscoverQuery()
+        base.minRating = 7.0
+        base.yearFrom = 2015
+        base.sortBy = .revenue
+
+        let result = parse("科幻片", base: base)
+        #expect(result.query.genreIDs == [878])
+        #expect(result.query.minRating == 7.0)
+        #expect(result.query.yearFrom == 2015)
+        #expect(result.query.sortBy == .revenue)
+    }
+
+    @Test("识别不出条件：matched 为空，query 原样返回")
+    func unrecognized() {
+        var base = DiscoverQuery()
+        base.maxRating = 8.0
+        let result = parse("随便看看", base: base)
+        #expect(result.isEmpty)
+        #expect(result.query == base)
+        #expect(result.mediaKind == nil)
+    }
+
+    @Test("空输入不崩，按未识别处理")
+    func emptyInput() {
+        #expect(parse("").isEmpty)
+        #expect(parse("   \n").isEmpty)
+        #expect(parse("").query == DiscoverQuery())
+    }
+}
+

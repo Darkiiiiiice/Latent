@@ -117,7 +117,7 @@ enum Endpoint: Sendable, Hashable {
             let dateField = mediaKind == .tv ? "first_air_date" : "primary_release_date"
             var items: [URLQueryItem] = [
                 URLQueryItem(name: "language", value: language),
-                URLQueryItem(name: "sort_by", value: query.sortBy.rawValue),
+                URLQueryItem(name: "sort_by", value: query.sortBy.rawValue(for: mediaKind)),
                 URLQueryItem(name: "page", value: String(page)),
                 URLQueryItem(name: "include_adult", value: "false"),
             ]
@@ -143,6 +143,10 @@ enum Endpoint: Sendable, Hashable {
                 items.append(URLQueryItem(name: "with_watch_providers", value: query.providerIDs.sorted().map(String.init).joined(separator: "|")))
                 items.append(URLQueryItem(name: "watch_region", value: query.region))
                 items.append(URLQueryItem(name: "with_watch_monetization_types", value: "flatrate|free|ads"))
+            }
+            // `with_runtime` 只对电影有效；剧集端点没有该参数，传了会被忽略，故不发送。
+            if let maxRuntime = query.maxRuntime, mediaKind == .movie {
+                items.append(URLQueryItem(name: "with_runtime.lte", value: String(maxRuntime)))
             }
             return items
         case .genreList:

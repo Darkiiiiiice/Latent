@@ -98,6 +98,9 @@ struct DiscoverView: View {
     @State private var debouncer = Debouncer()
     @State private var isNamingPreset = false
     @State private var presetName = ""
+    @State private var nlText = ""
+    @State private var nlMatched: [String] = []
+    @State private var nlHint: String?
 
     private let years: [Int] = Array((1950...Calendar.current.component(.year, from: Date())).reversed())
 
@@ -177,8 +180,64 @@ struct DiscoverView: View {
         }
     }
 
+    /// 一句话筛选（本地规则解析，见 `NLQueryParser`）：把「90 分钟以内的科幻片」填进筛选条。
+    private var naturalLanguageField: some View {
+        VStack(alignment: .leading, spacing: UI.Spacing.s2) {
+            HStack(spacing: UI.Spacing.s2) {
+                Image(systemName: "text.magnifyingglass")
+                    .font(.system(size: 11))
+                    .foregroundStyle(UI.Palette.textSecondary)
+
+                TextField("用一句话描述：90 分钟以内的科幻片", text: $nlText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                    .onSubmit { applyNaturalLanguage() }
+
+                if !nlText.isEmpty {
+                    Button {
+                        nlText = ""
+                        nlMatched = []
+                        nlHint = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(UI.Palette.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("清空")
+                }
+
+                Button("解析") { applyNaturalLanguage() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(nlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(UI.Palette.bg, in: RoundedRectangle(cornerRadius: UI.Radius.chip, style: .continuous))
+            .hairlineBorder(UI.Palette.border, radius: UI.Radius.chip)
+
+            if let nlHint {
+                Text(nlHint)
+                    .font(.system(size: 10))
+                    .foregroundStyle(UI.Palette.textSecondary)
+            } else if !nlMatched.isEmpty {
+                HStack(spacing: 4) {
+                    Text("已识别")
+                        .font(.system(size: 10))
+                        .foregroundStyle(UI.Palette.textSecondary)
+                    Text(nlMatched.joined(separator: " · "))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(UI.Palette.accent)
+                }
+            }
+        }
+    }
+
     private var filterBar: some View {
         VStack(alignment: .leading, spacing: UI.Spacing.s3) {
+            naturalLanguageField
+
             HStack(spacing: UI.Spacing.s3) {
                 Picker("类型", selection: mediaKindSelection) {
                     Text("电影").tag(MediaKind.movie)
@@ -235,6 +294,16 @@ struct DiscoverView: View {
                     ratingPicker(title: "最低", selection: $query.minRating)
                     Text("–").foregroundStyle(UI.Palette.textSecondary)
                     ratingPicker(title: "最高", selection: $query.maxRating)
+                }
+
+                // 时长上限：TMDB 只对电影提供 `with_runtime`，剧集侧不显示也不下发。
+                if mediaKind == .movie {
+                    HStack(spacing: UI.Spacing.s2) {
+                        Text("时长")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(UI.Palette.textSecondary)
+                        runtimePicker
+                    }
                 }
 
                 Spacer(minLength: 0)
@@ -436,15 +505,35 @@ struct DiscoverView: View {
         .help("\(title)评分")
     }
 
+    private static let runtimeOptions: [Int] = [90, 100, 120, 150, 180]
+
+    private var runtimePicker: some View {
+        Picker("时长", selection: $query.maxRuntime) {
+            Text("不限").tag(Int?.none)
+            ForEach(Self.runtimeOptions, id: \.self) { minutes in
+                Text("≤\(minutes) 分钟").tag(Int?.some(minutes))
+            }
+            // 一句话筛选可能解析出别的分钟数（如「95 分钟以内」），补一项避免选择器显示空白。
+            if let current = query.maxRuntime, !Self.runtimeOptions.contains(current) {
+                Text("≤\(current) 分钟").tag(Int?.some(current))
+            }
+        }
+        .labelsHidden()
+        .frame(width: 92)
+        .help("电影时长上限")
+    }
+
     private var mediaKindSelection: Binding<MediaKind> {
         Binding(
             get: { mediaKind },
             set: { newValue in
                 guard newValue != mediaKind else { return }
                 mediaKind = newValue
-                // 电影 / 剧集的类型 ID 与平台清单属于两套体系，切换时清空并重新拉取。
+                // 电影 / 剧集的类型 ID 与平台清单属于两套体系，切换时清空并重新拉取；
+                // 时长上限只有电影支持，一并清掉。
                 query.genreIDs.removeAll()
                 query.providerIDs.removeAll()
+                query.maxRuntime = nil
                 genres = []
                 providers = []
                 Task { await loadGenres() }
@@ -475,6 +564,53 @@ struct DiscoverView: View {
         // 平台可用性按地区划分，已选的平台在新区不一定存在。
         query.providerIDs.removeAll()
         Task { await loadProviders() }
+    }
+
+    /// 解析「一句话」并套用到筛选条（本地规则解析，见 `NLQueryParser`）。
+    private func applyNaturalLanguage() {
+        let text = nlText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+
+        let result = NLQueryParser.parse(
+            text, genres: genres, providers: providers, base: query, mediaKind: mediaKind
+        )
+
+        // 句子里点名了另一种作品类型：类型 ID 与平台清单分属两套体系，
+        // 需先切换类型、重拉两份清单，再用新表重新解析一次。
+        if let kind = result.mediaKind, kind != mediaKind {
+            mediaKind = kind
+            query.genreIDs.removeAll()
+            query.providerIDs.removeAll()
+            query.maxRuntime = nil
+            genres = []
+            providers = []
+            nlMatched = []
+            nlHint = nil
+            Task {
+                await loadGenres()
+                await loadProviders()
+                let retried = NLQueryParser.parse(
+                    text, genres: genres, providers: providers, base: query, mediaKind: mediaKind
+                )
+                applyParsed(retried)
+            }
+            return
+        }
+
+        applyParsed(result)
+    }
+
+    /// 套用一次解析结果并回显命中项；什么都没识别出来时给一句提示。
+    private func applyParsed(_ result: NLQueryParser.Result) {
+        guard !result.isEmpty else {
+            nlMatched = []
+            nlHint = "没识别出条件，试试「90 分钟以内的科幻片」这类说法"
+            return
+        }
+        nlHint = nil
+        nlMatched = result.matched
+        query = result.query
+        scheduleReload()
     }
 
     private func savePreset() {
