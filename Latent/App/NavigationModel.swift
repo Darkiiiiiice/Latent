@@ -51,6 +51,8 @@ enum DetailDestination: Hashable, Sendable {
     case movie(id: Int, fallback: MediaSummary?)
     case tv(id: Int, fallback: MediaSummary?)
     case person(id: Int)
+    /// 制片公司页（v1.21）；`name` 用于载入期间先显示标题。
+    case company(id: Int, name: String?)
 }
 
 extension DetailDestination {
@@ -59,6 +61,7 @@ extension DetailDestination {
         case let (.movie(lID, _), .movie(rID, _)): return lID == rID
         case let (.tv(lID, _), .tv(rID, _)): return lID == rID
         case let (.person(lID), .person(rID)): return lID == rID
+        case let (.company(lID, _), .company(rID, _)): return lID == rID
         default: return false
         }
     }
@@ -71,6 +74,8 @@ extension DetailDestination {
             hasher.combine("tv"); hasher.combine(id)
         case .person(let id):
             hasher.combine("person"); hasher.combine(id)
+        case .company(let id, _):
+            hasher.combine("company"); hasher.combine(id)
         }
     }
 

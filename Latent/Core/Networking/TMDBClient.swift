@@ -128,6 +128,10 @@ actor TMDBClient: TMDBClientProtocol {
         try await fetch(.collection(id: id))
     }
 
+    func company(id: Int) async throws -> CompanyDetail {
+        try await fetch(.company(id: id))
+    }
+
     func discover(mediaKind: MediaKind, query: DiscoverQuery, page: Int) async throws -> Paged<MediaSummary> {
         try await fetch(.discover(mediaKind: mediaKind, query: query, page: page))
     }

@@ -1,0 +1,14 @@
+{
+  "id": 923,
+  "name": "传奇影业",
+  "description": "传奇影业是一家美国影视制作公司，以《沙丘》《哥斯拉》等系列著称。",
+  "headquarters": "美国加利福尼亚州伯班克",
+  "homepage": "https://www.legendary.com",
+  "logo_path": "/8M99D8wDWbZmyLWZB2O19kxW1Jn.png",
+  "origin_country": "US",
+  "parent_company": {
+    "id": 1,
+    "logo_path": null,
+    "name": "传奇娱乐"
+  }
+}

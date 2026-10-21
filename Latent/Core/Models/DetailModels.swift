@@ -33,6 +33,8 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
     let belongsToCollection: CollectionSummary?
     /// 分地区发行信息（v1.20，append_to_response=release_dates）。
     let releaseDates: ReleaseDatesResponse?
+    /// 制片公司（v1.21）：点击进入公司页看该公司作品。
+    let productionCompanies: [ProductionCompany]?
 
     var mediaKind: MediaKind { .movie }
 
@@ -52,6 +54,7 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         case originCountry = "origin_country"
         case belongsToCollection = "belongs_to_collection"
         case releaseDates = "release_dates"
+        case productionCompanies = "production_companies"
     }
 
     init(
@@ -65,7 +68,8 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         runtime: Int? = nil, budget: Int? = nil, revenue: Int? = nil,
         productionCountries: [ProductionCountry]? = nil, originCountry: [String]? = nil,
         belongsToCollection: CollectionSummary? = nil,
-        releaseDates: ReleaseDatesResponse? = nil
+        releaseDates: ReleaseDatesResponse? = nil,
+        productionCompanies: [ProductionCompany]? = nil
     ) {
         self.id = id
         self.title = title
@@ -94,6 +98,7 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         self.originCountry = originCountry
         self.belongsToCollection = belongsToCollection
         self.releaseDates = releaseDates
+        self.productionCompanies = productionCompanies
     }
 
     init(from decoder: any Decoder) throws {
@@ -129,6 +134,7 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         self.originCountry = (try? container.decodeIfPresent([String].self, forKey: .originCountry)) ?? nil
         self.belongsToCollection = (try? container.decodeIfPresent(CollectionSummary.self, forKey: .belongsToCollection)) ?? nil
         self.releaseDates = (try? container.decodeIfPresent(ReleaseDatesResponse.self, forKey: .releaseDates)) ?? nil
+        self.productionCompanies = (try? container.decodeIfPresent([ProductionCompany].self, forKey: .productionCompanies)) ?? nil
     }
 
     /// 事实栏行（电影：状态 / 上映 / 时长 / 预算 / 票房 / 语言）。

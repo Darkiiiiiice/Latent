@@ -20,7 +20,20 @@
   "overview": "保罗·厄崔迪与契妮和弗雷曼人并肩作战，踏上复仇之路，阻止只有他能预见的可怕未来。",
   "popularity": 1184.2,
   "poster_path": "/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",
-  "production_companies": [],
+  "production_companies": [
+    {
+      "id": 923,
+      "logo_path": "/8M99D8wDWbZmyLWZB2O19kxW1Jn.png",
+      "name": "传奇影业",
+      "origin_country": "US"
+    },
+    {
+      "id": 174,
+      "logo_path": null,
+      "name": "华纳兄弟影业",
+      "origin_country": "US"
+    }
+  ],
   "production_countries": [
     { "iso_3166_1": "US", "name": "United States of America" }
   ],

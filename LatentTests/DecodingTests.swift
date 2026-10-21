@@ -178,6 +178,36 @@ struct DecodingTests {
         #expect(ReleaseDateEntry(releaseDate: nil).dayString == nil)
     }
 
+    @Test("制作公司：详情里的 production_companies 解析（v1.21）")
+    func movieProductionCompanies() throws {
+        let detail = try decoder.decode(MovieDetail.self, from: Fixtures.data("movie_detail"))
+        let companies = try #require(detail.productionCompanies)
+        #expect(companies.map(\.id) == [923, 174])
+        #expect(companies.map(\.name) == ["传奇影业", "华纳兄弟影业"])
+        #expect(companies[0].logoPath == "/8M99D8wDWbZmyLWZB2O19kxW1Jn.png")
+        #expect(companies[1].logoPath == nil)
+        #expect(companies[0].countryName != nil)
+    }
+
+    @Test("公司详情：总部 / 官网 / 母公司解析；缺字段不崩（v1.21）")
+    func companyDetail() throws {
+        let company = try decoder.decode(CompanyDetail.self, from: Fixtures.data("company"))
+        #expect(company.id == 923)
+        #expect(company.name == "传奇影业")
+        #expect(company.headquarters == "美国加利福尼亚州伯班克")
+        #expect(company.homepage?.absoluteString == "https://www.legendary.com")
+        #expect(company.logoPath == "/8M99D8wDWbZmyLWZB2O19kxW1Jn.png")
+        #expect(company.parentCompany?.name == "传奇娱乐")
+        #expect(company.biography == "传奇影业是一家美国影视制作公司，以《沙丘》《哥斯拉》等系列著称。")
+
+        let minimal = try decoder.decode(CompanyDetail.self, from: Data(#"{"id": 9, "description": "   "}"#.utf8))
+        #expect(minimal.name == "未知公司")
+        #expect(minimal.biography == nil)
+        #expect(minimal.homepage == nil)
+        #expect(minimal.parentCompany == nil)
+        #expect(minimal.countryName == nil)
+    }
+
     @Test("系列详情：缺 parts / 缺 id 不崩")
     func collectionTolerance() throws {
         let empty = try decoder.decode(MovieCollection.self, from: Data(#"{"name":"空系列"}"#.utf8))

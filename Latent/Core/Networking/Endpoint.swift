@@ -20,6 +20,8 @@ enum Endpoint: Sendable, Hashable {
     case personDetail(id: Int)
     /// GET /3/collection/{id}（v1.19 电影系列追踪）
     case collection(id: Int)
+    /// GET /3/company/{id}（v1.21 制片公司）
+    case company(id: Int)
     /// GET /3/discover/{movie,tv}
     case discover(mediaKind: MediaKind, query: DiscoverQuery, page: Int)
     /// GET /3/genre/{movie,tv}/list
@@ -59,6 +61,8 @@ enum Endpoint: Sendable, Hashable {
             return "/3/person/\(id)"
         case .collection(let id):
             return "/3/collection/\(id)"
+        case .company(let id):
+            return "/3/company/\(id)"
         case .discover(let mediaKind, _, _):
             return "/3/discover/\(mediaKind == .tv ? "tv" : "movie")"
         case .genreList(let mediaKind):
@@ -77,7 +81,7 @@ enum Endpoint: Sendable, Hashable {
             return CacheTTL.trending
         case .searchMulti:
             return CacheTTL.search
-        case .movieDetail, .tvDetail, .tvSeason, .personDetail, .collection, .discover:
+        case .movieDetail, .tvDetail, .tvSeason, .personDetail, .collection, .company, .discover:
             return CacheTTL.detail
         }
     }
@@ -119,6 +123,8 @@ enum Endpoint: Sendable, Hashable {
             ]
         case .collection:
             return [URLQueryItem(name: "language", value: language)]
+        case .company:
+            return [URLQueryItem(name: "language", value: language)]
         case .discover(let mediaKind, let query, let page):
             let dateField = mediaKind == .tv ? "first_air_date" : "primary_release_date"
             var items: [URLQueryItem] = [
@@ -142,6 +148,9 @@ enum Endpoint: Sendable, Hashable {
             }
             if let maxRating = query.maxRating {
                 items.append(URLQueryItem(name: "vote_average.lte", value: String(format: "%.1f", maxRating)))
+            }
+            if let companyID = query.companyID {
+                items.append(URLQueryItem(name: "with_companies", value: String(companyID)))
             }
             if !query.providerIDs.isEmpty {
                 // TMDB 要求 `with_watch_providers` 必须与 `watch_region` 同时出现；

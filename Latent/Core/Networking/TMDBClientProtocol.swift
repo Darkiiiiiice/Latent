@@ -10,6 +10,7 @@ protocol TMDBClientProtocol: Sendable {
     func tvSeason(id: Int, seasonNumber: Int) async throws -> SeasonDetail
     func personDetail(id: Int) async throws -> PersonDetail
     func collection(id: Int) async throws -> MovieCollection
+    func company(id: Int) async throws -> CompanyDetail
     func discover(mediaKind: MediaKind, query: DiscoverQuery, page: Int) async throws -> Paged<MediaSummary>
     func genreList(mediaKind: MediaKind) async throws -> [Genre]
     func watchProviders(mediaKind: MediaKind, region: String) async throws -> [WatchProvider]
@@ -40,6 +41,7 @@ struct MockTMDBClient: TMDBClientProtocol {
     var season: SeasonDetail = .sample
     var person: PersonDetail = .sample
     var collection: MovieCollection = .sample
+    var company: CompanyDetail = .sample
     var discoverPage = Paged(page: 1, items: MediaSummary.samples(count: 18, kind: .movie), totalPages: 2, totalResults: 36)
     var genres: [Genre] = Genre.samples
     var providers: [WatchProvider] = WatchProvider.samples
@@ -57,6 +59,7 @@ struct MockTMDBClient: TMDBClientProtocol {
     func tvSeason(id: Int, seasonNumber: Int) async throws -> SeasonDetail { season }
     func personDetail(id: Int) async throws -> PersonDetail { person }
     func collection(id: Int) async throws -> MovieCollection { collection }
+    func company(id: Int) async throws -> CompanyDetail { company }
     func discover(mediaKind: MediaKind, query: DiscoverQuery, page: Int) async throws -> Paged<MediaSummary> { discoverPage }
     func genreList(mediaKind: MediaKind) async throws -> [Genre] { genres }
     func watchProviders(mediaKind: MediaKind, region: String) async throws -> [WatchProvider] { providers }
@@ -172,6 +175,17 @@ extension PersonDetail {
         birthday: "1995-12-27", placeOfBirth: "美国纽约",
         knownForDepartment: "Acting",
         combinedCredits: CombinedCredits(cast: MediaSummary.samples(count: 12, kind: .movie))
+    )
+}
+
+extension CompanyDetail {
+    static let sample = CompanyDetail(
+        id: 3_474, name: "传奇影业",
+        description: "传奇影业是一家美国影视制作公司，以《沙丘》《哥斯拉》等系列著称。",
+        headquarters: "美国加利福尼亚州伯班克",
+        homepage: URL(string: "https://www.legendary.com"),
+        originCountry: "US",
+        parentCompany: ProductionCompany(id: 1, name: "传奇娱乐")
     )
 }
 

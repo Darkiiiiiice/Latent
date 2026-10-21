@@ -157,6 +157,33 @@ struct EndpointTests {
         #expect(query.first?.value == "zh-CN")
     }
 
+    @Test("公司端点：路径只带 language（v1.21）")
+    func companyPath() {
+        let url = EndpointURLBuilder.url(for: .company(id: 923), language: "zh-CN")
+        #expect(url.path == "/3/company/923")
+        let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        #expect(query.map(\.name) == ["language"])
+        #expect(query.first?.value == "zh-CN")
+    }
+
+    @Test("公司作品：discover 带 with_companies，且不属于可清空条件（v1.21）")
+    func discoverCompanyScope() {
+        var query = DiscoverQuery()
+        query.companyID = 923
+        query.sortBy = .newest
+
+        let items = URLComponents(
+            url: EndpointURLBuilder.url(for: .discover(mediaKind: .movie, query: query, page: 1), language: "zh-CN"),
+            resolvingAgainstBaseURL: false
+        )!.queryItems!
+
+        #expect(items.contains { $0.name == "with_companies" && $0.value == "923" })
+        #expect(items.contains { $0.name == "sort_by" && $0.value == "primary_release_date.desc" })
+        // 公司作用是限定范围，不当作「已设置筛选条件」。
+        #expect(query.isEmpty)
+        #expect(!query.summaryLabel().contains("923"))
+    }
+
     @Test("同一请求产出稳定 URL（缓存键依赖）")
     func stableURL() {
         let first = EndpointURLBuilder.url(for: .movieDetail(id: 1), language: "zh-CN")

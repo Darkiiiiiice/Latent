@@ -26,6 +26,8 @@ struct DiscoverQuery: Codable, Sendable, Equatable, Hashable {
     var region: String = DiscoverQuery.defaultRegion
     /// 时长上限（分钟，含）。TMDB 只对电影支持 `with_runtime`，剧集侧忽略此条件。
     var maxRuntime: Int?
+    /// 制片公司（v1.21）：公司页用它取该公司作品；属于作用域而非可清空的条件，不计入 `isEmpty`。
+    var companyID: Int?
     var sortBy: SortBy = .popularity
 
     enum SortBy: String, Codable, CaseIterable, Sendable, Hashable {

@@ -12,6 +12,8 @@ struct DetailRouteView: View {
             TVShowDetailView(showID: id, fallback: fallback)
         case .person(let id):
             PersonDetailView(personID: id)
+        case .company(let id, let name):
+            CompanyDetailView(companyID: id, fallbackName: name)
         }
     }
 }
@@ -41,6 +43,7 @@ struct MovieDetailView: View {
             receiptAction: movie == nil ? nil : { showsReceipt = true },
             extraContent: { _ in
                 collectionSection
+                companySection
                 releaseSection
             }
         ) { detail in
@@ -104,6 +107,63 @@ struct MovieDetailView: View {
                 }
             }
         }
+    }
+
+    /// 制作公司（v1.21）：横向排列，点公司进入公司页看它的作品。
+    @ViewBuilder
+    private var companySection: some View {
+        let companies = movie?.productionCompanies ?? []
+        if !companies.isEmpty {
+            VStack(alignment: .leading, spacing: UI.Spacing.s3) {
+                SectionHeader(title: "制作公司")
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: UI.Spacing.s2) {
+                        ForEach(companies) { company in
+                            Button {
+                                openCompany(company)
+                            } label: {
+                                companyChip(company)
+                            }
+                            .buttonStyle(.plain)
+                            .help("查看 \(company.name) 的作品")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func companyChip(_ company: ProductionCompany) -> some View {
+        HStack(spacing: 6) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(company.logoPath == nil ? UI.Palette.surface : Color.white)
+
+                if let logoPath = company.logoPath {
+                    PosterImage(path: logoPath, displayWidth: 26, cornerRadius: 4, contentMode: .fit)
+                        .padding(3)
+                } else {
+                    Image(systemName: "building.2")
+                        .font(.system(size: 11))
+                        .foregroundStyle(UI.Palette.textSecondary)
+                }
+            }
+            .frame(width: 28, height: 28)
+
+            Text(company.name)
+                .font(.system(size: 11))
+                .foregroundStyle(UI.Palette.textPrimary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, UI.Spacing.s2)
+        .padding(.vertical, 5)
+        .background {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(UI.Palette.surface)
+        }
+        .hairlineBorder(radius: 7)
+        .contentShape(Rectangle())
     }
 
     /// 发行信息（v1.20）：分地区折叠——默认展开中国大陆（无则第一个地区），
@@ -256,6 +316,14 @@ struct MovieDetailView: View {
     private func openSummary(_ summary: MediaSummary) {
         guard let destination = DetailDestination.from(summary) else { return }
         NotificationCenter.default.post(name: AppCommandBus.pushDetail, object: destination)
+    }
+
+    /// 制作公司点击后进入公司页。
+    private func openCompany(_ company: ProductionCompany) {
+        NotificationCenter.default.post(
+            name: AppCommandBus.pushDetail,
+            object: DetailDestination.company(id: company.id, name: company.name)
+        )
     }
 
     private func load() async {
