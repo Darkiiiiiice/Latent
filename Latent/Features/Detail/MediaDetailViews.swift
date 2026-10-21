@@ -28,6 +28,8 @@ struct MovieDetailView: View {
     @State private var errorMessage: String?
     @State private var isLoading = true
     @State private var showsReceipt = false
+    @State private var expandedRegion: String?
+    @State private var showsAllRegions = false
 
     var body: some View {
         MediaDetailScaffold(
@@ -37,11 +39,18 @@ struct MovieDetailView: View {
             errorMessage: errorMessage,
             reload: { await load() },
             receiptAction: movie == nil ? nil : { showsReceipt = true },
-            extraContent: { _ in collectionSection }
+            extraContent: { _ in
+                collectionSection
+                releaseSection
+            }
         ) { detail in
             factsSection(detail)
         }
         .task(id: movieID) { await load() }
+        .onChange(of: movie?.id) { _, _ in
+            expandedRegion = movie?.defaultReleaseRegion
+            showsAllRegions = false
+        }
         .task(id: movie?.belongsToCollection?.id) {
             guard let collectionID = movie?.belongsToCollection?.id else {
                 collection = nil
@@ -95,6 +104,125 @@ struct MovieDetailView: View {
                 }
             }
         }
+    }
+
+    /// 发行信息（v1.20）：分地区折叠——默认展开中国大陆（无则第一个地区），
+    /// 最多先列 5 个地区，其余折叠在「显示全部」后面，避免详情页被几十行地区撑长。
+    @ViewBuilder
+    private var releaseSection: some View {
+        let regions = movie?.releaseRegions ?? []
+        if !regions.isEmpty {
+            let visible = showsAllRegions ? regions : Array(regions.prefix(5))
+            VStack(alignment: .leading, spacing: UI.Spacing.s2) {
+                HStack {
+                    SectionHeader(title: "发行信息")
+                    Spacer()
+                    Text("\(regions.count) 个地区")
+                        .font(.system(size: 11))
+                        .foregroundStyle(UI.Palette.textSecondary)
+                }
+
+                VStack(spacing: 0) {
+                    ForEach(Array(visible.enumerated()), id: \.element.id) { index, region in
+                        if index > 0 {
+                            Divider().overlay(UI.Palette.border)
+                        }
+                        regionRow(region)
+                    }
+                }
+                .background(UI.Palette.surface, in: RoundedRectangle(cornerRadius: UI.Radius.button, style: .continuous))
+                .hairlineBorder(UI.Palette.border, radius: UI.Radius.button)
+
+                if regions.count > 5 {
+                    Button(showsAllRegions ? "收起其余地区" : "显示全部 \(regions.count) 个地区") {
+                        withAnimation(UI.Motion.hover) { showsAllRegions.toggle() }
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12))
+                    .foregroundStyle(UI.Palette.accent)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func regionRow(_ region: RegionReleaseRow) -> some View {
+        let isExpanded = expandedRegion == region.code
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(UI.Motion.hover) {
+                    expandedRegion = isExpanded ? nil : region.code
+                }
+            } label: {
+                HStack(spacing: UI.Spacing.s2) {
+                    Text(region.name)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(UI.Palette.textPrimary)
+
+                    if let certification = region.certification {
+                        Text(certification)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(UI.Palette.textSecondary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                    .strokeBorder(UI.Palette.border, lineWidth: 1)
+                            )
+                    }
+
+                    Spacer(minLength: UI.Spacing.s2)
+
+                    if let summary = region.summary {
+                        Text(summary)
+                            .font(.system(size: 11))
+                            .foregroundStyle(UI.Palette.textSecondary)
+                            .lineLimit(1)
+                    }
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(UI.Palette.textSecondary)
+                }
+                .padding(.horizontal, UI.Spacing.s3)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(region.name)，\(isExpanded ? "已展开" : "已收起")")
+            .accessibilityHint("双击展开该地区的发行记录")
+
+            if isExpanded {
+                VStack(spacing: 4) {
+                    ForEach(region.entries) { entry in
+                        HStack(spacing: UI.Spacing.s2) {
+                            Text(entry.typeLabel)
+                                .font(.system(size: 11))
+                                .foregroundStyle(UI.Palette.textSecondary)
+                                .frame(width: 32, alignment: .leading)
+                            Text(Formatters.fullDate(entry.dayString) ?? "日期待定")
+                                .font(.system(size: 12))
+                                .foregroundStyle(UI.Palette.textPrimary)
+                            if let note = trimmedNote(entry.note) {
+                                Text(note)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(UI.Palette.textSecondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+                .padding(.horizontal, UI.Spacing.s3)
+                .padding(.bottom, UI.Spacing.s3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private func trimmedNote(_ note: String) -> String? {
+        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func loadCollection(_ id: Int) async {

@@ -31,6 +31,8 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
     let originCountry: [String]?
     /// 所属系列（v1.19）：系列片才有，普通独立电影为 nil。
     let belongsToCollection: CollectionSummary?
+    /// 分地区发行信息（v1.20，append_to_response=release_dates）。
+    let releaseDates: ReleaseDatesResponse?
 
     var mediaKind: MediaKind { .movie }
 
@@ -49,6 +51,7 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         case productionCountries = "production_countries"
         case originCountry = "origin_country"
         case belongsToCollection = "belongs_to_collection"
+        case releaseDates = "release_dates"
     }
 
     init(
@@ -61,7 +64,8 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         recommendations: [MediaSummary]? = nil, watchProviders: WatchProviders? = nil,
         runtime: Int? = nil, budget: Int? = nil, revenue: Int? = nil,
         productionCountries: [ProductionCountry]? = nil, originCountry: [String]? = nil,
-        belongsToCollection: CollectionSummary? = nil
+        belongsToCollection: CollectionSummary? = nil,
+        releaseDates: ReleaseDatesResponse? = nil
     ) {
         self.id = id
         self.title = title
@@ -89,6 +93,7 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         self.productionCountries = productionCountries
         self.originCountry = originCountry
         self.belongsToCollection = belongsToCollection
+        self.releaseDates = releaseDates
     }
 
     init(from decoder: any Decoder) throws {
@@ -123,6 +128,7 @@ struct MovieDetail: MediaDetail, Decodable, Sendable {
         self.productionCountries = (try? container.decodeIfPresent([ProductionCountry].self, forKey: .productionCountries)) ?? nil
         self.originCountry = (try? container.decodeIfPresent([String].self, forKey: .originCountry)) ?? nil
         self.belongsToCollection = (try? container.decodeIfPresent(CollectionSummary.self, forKey: .belongsToCollection)) ?? nil
+        self.releaseDates = (try? container.decodeIfPresent(ReleaseDatesResponse.self, forKey: .releaseDates)) ?? nil
     }
 
     /// 事实栏行（电影：状态 / 上映 / 时长 / 预算 / 票房 / 语言）。

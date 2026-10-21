@@ -138,6 +138,46 @@ struct DecodingTests {
         #expect(ordered.last?.dateString == nil)
     }
 
+    @Test("发行信息：分地区解析、过滤空地区、CN 优先（v1.20）")
+    func releaseDates() throws {
+        let detail = try decoder.decode(MovieDetail.self, from: Fixtures.data("movie_detail"))
+        let regions = detail.releaseRegions
+
+        // JP 没有发行记录，整条被过滤掉。
+        #expect(regions.map(\.code) == ["CN", "US", "GB"])
+
+        // CN 无分级（空串按缺失处理），摘要只给日期。
+        #expect(regions[0].certification == nil)
+        #expect(regions[0].summary == "2024 年 3 月 8 日")
+
+        // US 两条记录：院线 + 数字，带分级与备注。
+        #expect(regions[1].certification == "PG-13")
+        #expect(regions[1].entries.map(\.typeLabel) == ["院线", "数字"])
+        #expect(regions[1].entries[1].summary == "数字 · 2024 年 3 月 12 日 · 导演剪辑版")
+
+        #expect(detail.defaultReleaseRegion == "CN")
+    }
+
+    @Test("发行信息：无 release_dates 时为空且默认地区为 nil")
+    func releaseDatesMissing() throws {
+        let json = #"{"id": 1, "title": "独立电影"}"#
+        let detail = try decoder.decode(MovieDetail.self, from: Data(json.utf8))
+        #expect(detail.releaseDates == nil)
+        #expect(detail.releaseRegions.isEmpty)
+        #expect(detail.defaultReleaseRegion == nil)
+    }
+
+    @Test("发行类型：未知编号退化为「其它」，时间戳取日期部分")
+    func releaseEntryHelpers() {
+        let entry = ReleaseDateEntry(releaseDate: "2024-02-27T00:00:00.000Z", type: 99, note: "")
+        #expect(entry.dayString == "2024-02-27")
+        #expect(entry.typeLabel == "其它")
+
+        let bare = ReleaseDateEntry(releaseDate: "2024-02-27", type: 3)
+        #expect(bare.dayString == "2024-02-27")
+        #expect(ReleaseDateEntry(releaseDate: nil).dayString == nil)
+    }
+
     @Test("系列详情：缺 parts / 缺 id 不崩")
     func collectionTolerance() throws {
         let empty = try decoder.decode(MovieCollection.self, from: Data(#"{"name":"空系列"}"#.utf8))
