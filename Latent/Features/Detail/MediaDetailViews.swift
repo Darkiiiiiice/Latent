@@ -413,6 +413,10 @@ struct MediaDetailScaffold<Detail: MediaDetail, Facts: View, Extra: View>: View 
                     .frame(width: 168, height: 252)
                     .overlay(RoundedRectangle(cornerRadius: UI.Radius.poster, style: .continuous).strokeBorder(UI.Palette.border, lineWidth: 1))
                     .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 8)
+                    .contentShape(RoundedRectangle(cornerRadius: UI.Radius.poster, style: .continuous))
+                    .contextMenu {
+                        MediaContextMenu(summary: summary, details: detail?.libraryDetails)
+                    }
                     .accessibilityHidden(true)
             }
 

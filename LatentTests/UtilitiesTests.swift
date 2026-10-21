@@ -415,3 +415,26 @@ struct RandomPickTests {
         #expect([movie, show].randomPick(excluding: movie) == show)
     }
 }
+
+/// TMDB 外链（设计文档第 11 节）：右键菜单「复制链接 / 在 TMDB 打开」的地址来源。
+@Suite("TMDB 外链")
+struct TMDBLinksTests {
+
+    @Test("网页链接按类型拼路径")
+    func pageURL() {
+        #expect(TMDBLinks.pageURL(mediaKind: .movie, tmdbID: 693_134)?.absoluteString
+            == "https://www.themoviedb.org/movie/693134")
+        #expect(TMDBLinks.pageURL(mediaKind: .tv, tmdbID: 1399)?.absoluteString
+            == "https://www.themoviedb.org/tv/1399")
+        #expect(TMDBLinks.pageURL(mediaKind: .person, tmdbID: 287)?.absoluteString
+            == "https://www.themoviedb.org/person/287")
+    }
+
+    @Test("IMDb 外链：空 id 返回 nil")
+    func imdbURL() {
+        #expect(TMDBLinks.imdbURL(imdbID: "tt15239678")?.absoluteString
+            == "https://www.imdb.com/title/tt15239678/")
+        #expect(TMDBLinks.imdbURL(imdbID: nil) == nil)
+        #expect(TMDBLinks.imdbURL(imdbID: "") == nil)
+    }
+}

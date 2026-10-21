@@ -14,7 +14,7 @@ struct PosterPaletteWall: View {
 
     struct Swatch: Identifiable, Equatable {
         let id: String
-        let title: String
+        let summary: MediaSummary
         let dominant: ReceiptColor
         let secondary: ReceiptColor
     }
@@ -47,8 +47,9 @@ struct PosterPaletteWall: View {
                                     )
                                 )
                                 .frame(height: 46)
-                                .help(swatch.title)
-                                .accessibilityLabel("海报色板：\(swatch.title)")
+                                .help(swatch.summary.title)
+                                .contextMenu { MediaContextMenu(summary: swatch.summary) }
+                                .accessibilityLabel("海报色板：\(swatch.summary.title)")
                         }
                     }
                 } else if isLoaded {
@@ -101,7 +102,7 @@ struct PosterPaletteWall: View {
         else { return nil }
         return Swatch(
             id: item.id,
-            title: item.title,
+            summary: item.asSummary,
             dominant: colors.dominant,
             secondary: colors.secondary
         )

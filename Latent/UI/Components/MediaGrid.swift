@@ -175,9 +175,13 @@ struct MediaListRow: View {
 }
 
 /// 统一右键菜单（设计文档第 8.4 节）。
+///
+/// `details` 可选：详情页主海报传入后，收藏 / 入清单会一并写入富化字段（v1.9），
+/// 与详情工具栏的收藏按钮行为一致。
 struct MediaContextMenu: View {
     let summary: MediaSummary
     var allowsLibraryMove: Bool = false
+    var details: LibraryDetails?
 
     @Environment(AppEnvironment.self) private var appEnv
 
@@ -187,14 +191,14 @@ struct MediaContextMenu: View {
     var body: some View {
         Button(isFavorite ? "移出收藏" : "加入收藏") {
             let wasFavorite = isFavorite
-            appEnv.library.toggleFavorite(summary)
+            appEnv.library.toggleFavorite(summary, details: details)
             ToastCenter.shared.show(wasFavorite ? "已移出收藏" : "已加入收藏")
         }
         .disabled(!summary.mediaKind.isLibraryEligible)
 
         Button(isInWatchlist ? "移出观看清单" : "加入观看清单") {
             let wasInWatchlist = isInWatchlist
-            appEnv.library.toggleWatchlist(summary)
+            appEnv.library.toggleWatchlist(summary, details: details)
             ToastCenter.shared.show(wasInWatchlist ? "已移出观看清单" : "已加入观看清单")
         }
         .disabled(!summary.mediaKind.isLibraryEligible)
