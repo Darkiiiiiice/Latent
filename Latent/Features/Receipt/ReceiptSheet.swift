@@ -12,6 +12,8 @@ struct ReceiptSheet: View {
     @State private var style: ReceiptStyle = .thermal
     /// 版式（v1.28）：经典 / 侧栏 / 全幅 / 索引。
     @State private var layout: ReceiptLayout = .classic
+    /// 画布比例（v1.33）：3:4 / 1:1 / 9:16。
+    @State private var aspect: ReceiptAspect = .portrait
     /// 海报保留封面原色（默认关：走该风格的固有双色调 / 灰度处理）。
     @State private var keepsPosterColors = false
     /// 卡片配色取自封面（默认关：保持十八款锁定配色）。开启后用封面主色 / 辅色重算整卡配色。
@@ -34,14 +36,18 @@ struct ReceiptSheet: View {
         keepsPosterColors ? .original : style.posterMode
     }
 
-    /// 重新生成系统分享图的触发键：版式 / 风格 / 两个开关 / 细节调节 / 海报是否就位。
+    /// 重新生成系统分享图的触发键：比例 / 版式 / 风格 / 两个开关 / 细节调节 / 海报是否就位。
     private var shareKey: String {
-        "\(layout.rawValue)|\(style.rawValue)|\(keepsPosterColors)|\(followsPoster)"
+        "\(aspect.rawValue)|\(layout.rawValue)|\(style.rawValue)|\(keepsPosterColors)|\(followsPoster)"
             + "|\(tuning.typeScale.rawValue)|\(tuning.margin.rawValue)"
             + "|\(tuning.customTagline)|\(tuning.showsWatermark)|\(poster != nil)"
+            + "|\(tuning.customNote)|\(tuning.showsWatchDate)|\(tuning.watchDate.timeIntervalSince1970)"
     }
 
-    private let previewScale: CGFloat = 0.6
+    /// 预览缩放：宽高各自受限于 420×432 的展示盒，三款比例都完整可见。
+    private var previewScale: CGFloat {
+        min(420 / aspect.size.width, 432 / aspect.size.height)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -87,7 +93,7 @@ struct ReceiptSheet: View {
                 .lineLimit(1)
                 .foregroundStyle(UI.Palette.textSecondary)
             Spacer(minLength: 0)
-            Text("3:4 · 1080×1440")
+            Text(aspect.exportText)
                 .font(.system(size: 11))
                 .foregroundStyle(UI.Palette.textSecondary)
         }
@@ -100,12 +106,12 @@ struct ReceiptSheet: View {
     private var preview: some View {
         ReceiptCardView(
             data: data, style: style, palette: palette, posterMode: posterMode,
-            poster: poster, layout: layout, tuning: tuning
+            poster: poster, layout: layout, aspect: aspect, tuning: tuning
         )
             .scaleEffect(previewScale, anchor: .topLeading)
             .frame(
-                width: ReceiptCanvas.size.width * previewScale,
-                height: ReceiptCanvas.size.height * previewScale,
+                width: aspect.size.width * previewScale,
+                height: aspect.size.height * previewScale,
                 alignment: .topLeading
             )
             .background(UI.Palette.surface)
@@ -117,6 +123,7 @@ struct ReceiptSheet: View {
 
     private var styleList: some View {
         VStack(alignment: .leading, spacing: UI.Spacing.s3) {
+            aspectPicker
             layoutPicker
 
             HStack {
@@ -207,6 +214,26 @@ struct ReceiptSheet: View {
                     }
                 }
 
+            TextField("一句短评（可选，概括你的观影感受）", text: $tuning.customNote)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 12))
+                .onChange(of: tuning.customNote) { _, newValue in
+                    let limited = String(newValue.prefix(40))
+                    if limited != newValue {
+                        tuning.customNote = limited
+                    }
+                }
+
+            HStack(spacing: UI.Spacing.s2) {
+                Toggle("印观影日期", isOn: $tuning.showsWatchDate)
+                    .help("在字段表末尾多印一行「观影 · 日期」")
+                if tuning.showsWatchDate {
+                    DatePicker("观影日期", selection: $tuning.watchDate, displayedComponents: .date)
+                        .labelsHidden()
+                        .datePickerStyle(.compact)
+                }
+            }
+
             Toggle("显示页脚水印", isOn: $tuning.showsWatermark)
                 .help("页脚那行「显影 · 本地元数据 · 非商业分享」")
         }
@@ -214,6 +241,29 @@ struct ReceiptSheet: View {
         .controlSize(.small)
         .font(.system(size: 12))
         .foregroundStyle(UI.Palette.textPrimary)
+    }
+
+    /// 画布比例选择（v1.33）。
+    private var aspectPicker: some View {
+        VStack(alignment: .leading, spacing: UI.Spacing.s2) {
+            HStack(spacing: UI.Spacing.s2) {
+                Text("比例")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(UI.Palette.textSecondary)
+                Spacer(minLength: 0)
+                Text(aspect.hint)
+                    .font(.system(size: 11))
+                    .lineLimit(1)
+                    .foregroundStyle(UI.Palette.textSecondary)
+            }
+            Picker("比例", selection: $aspect) {
+                ForEach(ReceiptAspect.allCases) { item in
+                    Text(item.displayName).tag(item)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+        }
     }
 
     private var layoutPicker: some View {
@@ -326,32 +376,32 @@ struct ReceiptSheet: View {
     private func updateShareImage() {
         guard let image = ReceiptRenderer.cgImage(
             data: data, style: style, palette: palette, posterMode: posterMode,
-            poster: poster, layout: layout, tuning: tuning
+            poster: poster, layout: layout, aspect: aspect, tuning: tuning
         ) else {
             shareImage = nil
             return
         }
-        shareImage = Image(nsImage: NSImage(cgImage: image, size: ReceiptCanvas.size))
+        shareImage = Image(nsImage: NSImage(cgImage: image, size: aspect.size))
     }
 
     private func copyToPasteboard() {
         guard let image = ReceiptRenderer.cgImage(
             data: data, style: style, palette: palette, posterMode: posterMode,
-            poster: poster, layout: layout, tuning: tuning
+            poster: poster, layout: layout, aspect: aspect, tuning: tuning
         ) else {
             ToastCenter.shared.show("分享卡生成失败")
             return
         }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.writeObjects([NSImage(cgImage: image, size: ReceiptCanvas.size)])
+        pasteboard.writeObjects([NSImage(cgImage: image, size: aspect.size)])
         ToastCenter.shared.show("已复制分享卡")
     }
 
     private func save() {
         guard let png = ReceiptRenderer.pngData(
             data: data, style: style, palette: palette, posterMode: posterMode,
-            poster: poster, layout: layout, tuning: tuning
+            poster: poster, layout: layout, aspect: aspect, tuning: tuning
         ) else {
             ToastCenter.shared.show("分享卡生成失败")
             return

@@ -624,9 +624,182 @@ struct ReceiptTests {
         #expect(png?.prefix(4) == Data([0x89, 0x50, 0x4E, 0x47]))
     }
 
+    @Test("底部留白完整：六款版式（不含出血的全幅）在三款比例下都保留上下留白，未被中心裁切")
+    func keepsBottomPaddingAcrossAspects() throws {
+        // 极端内容：字段最多（含观影日期）+ 长标题 + 大字档，最容易顶破画布。
+        let data = ReceiptData.build(from: MovieDetail(
+            id: 9, title: "超长标题用来顶破画布的测试影片：第二部", originalTitle: "A Very Long Title Part Two",
+            dateString: "2024-11-22", voteAverage: 8.6, voteCount: 12_345,
+            genres: [Genre(id: 878, name: "科幻"), Genre(id: 12, name: "冒险")],
+            tagline: "Long live the fighters.",
+            credits: Credits(
+                cast: [CastMember(id: 1, name: "提莫西·查拉梅", character: "Paul"),
+                       CastMember(id: 2, name: "赞达亚", character: "Chani"),
+                       CastMember(id: 3, name: "丽贝卡·弗格森", character: "Jessica")],
+                crew: [CrewMember(id: 4, name: "丹尼斯·维伦纽瓦", job: "Director", department: "Directing")]
+            ),
+            runtime: 166, budget: 190_000_000, revenue: 714_000_000
+        ))
+        let tuning = ReceiptTuning(
+            typeScale: .large, customTagline: "自定义页脚标语",
+            customNote: "沙虫那一幕值得一张 IMAX 票", showsWatchDate: true
+        )
+
+        for aspect in ReceiptAspect.allCases {
+            for layout in ReceiptLayout.allCases where layout != .immersive {
+                let image = try #require(ReceiptRenderer.cgImage(
+                    data: data, style: .thermal, palette: ReceiptStyle.thermal.basePalette,
+                    posterMode: .duotone, poster: nil, layout: layout, aspect: aspect, tuning: tuning
+                ), "\(aspect.displayName) × \(layout.displayName) 渲染失败")
+                let bottomRun = paperRunFromBottom(image, paper: ReceiptStyle.thermal.basePalette.paper, scale: aspect.exportScale)
+                #expect(
+                    bottomRun >= 18,
+                    "\(aspect.displayName) × \(layout.displayName) 底部留白仅 \(bottomRun)pt，疑似被中心裁切"
+                )
+                // 同时确认卡面确实有内容（空白整图不算通过）。
+                #expect(
+                    bottomRun < aspect.size.height * 0.5,
+                    "\(aspect.displayName) × \(layout.displayName) 底部留白异常大，卡面可能没渲染出内容"
+                )
+            }
+        }
+    }
+
+    /// 从底边往上数「整行都是纸底色」的连续高度（pt）。
+    private func paperRunFromBottom(_ image: CGImage, paper: ReceiptColor, scale: CGFloat) -> CGFloat {
+        let width = image.width
+        let height = image.height
+        guard let context = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return 0 }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let data = context.data else { return 0 }
+        let buffer = data.bindMemory(to: UInt8.self, capacity: width * height * 4)
+
+        // 纸底色的 RGB 目标值（容差 12，容忍抗锯齿与色彩空间往返误差）。
+        let raw = NSColor(paper.color).usingColorSpace(.deviceRGB) ?? .white
+        let target = (
+            r: Double(raw.redComponent * 255),
+            g: Double(raw.greenComponent * 255),
+            b: Double(raw.blueComponent * 255)
+        )
+
+        var rows = 0
+        for row in 0..<height {
+            var isPaper = true
+            for column in stride(from: 0, to: width, by: 3) {
+                let offset = ((height - 1 - row) * width + column) * 4
+                let dr = abs(Double(buffer[offset]) - target.r)
+                let dg = abs(Double(buffer[offset + 1]) - target.g)
+                let db = abs(Double(buffer[offset + 2]) - target.b)
+                if dr > 12 || dg > 12 || db > 12 {
+                    isPaper = false
+                    break
+                }
+            }
+            if !isPaper { break }
+            rows += 1
+        }
+        return CGFloat(rows) / scale
+    }
+
     @Test("文件名清洗：去掉路径非法字符")
     func sanitizesFilename() {
         #expect(ReceiptRenderer.filename(title: "沙丘/第二部") == "显影-沙丘-第二部-分享卡.png")
         #expect(ReceiptRenderer.filename(title: "  ") == "显影-分享卡-分享卡.png")
+    }
+
+    @Test("三款比例都导出 1080 宽：3:4 → 1440、1:1 → 1080、9:16 → 1920")
+    func rendersAllAspects() throws {
+        let data = ReceiptData.build(from: MovieDetail(
+            id: 3, title: "比例测试", originalTitle: "Aspect Test",
+            dateString: "2024-05-01", voteAverage: 8.1, voteCount: 1200,
+            genres: [Genre(id: 18, name: "剧情")],
+            credits: Credits(cast: [CastMember(id: 1, name: "甲")],
+                             crew: [CrewMember(id: 2, name: "乙", job: "Director", department: "Directing")]),
+            runtime: 121
+        ))
+        #expect(ReceiptAspect.allCases.count == 3)
+        #expect(ReceiptAspect.allCases.allSatisfy { !$0.hint.isEmpty })
+        #expect(Set(ReceiptAspect.allCases.map(\.exportText)).count == 3)
+
+        let expected: [ReceiptAspect: (Int, Int)] = [
+            .portrait: (1080, 1440),
+            .square: (1080, 1080),
+            .story: (1080, 1920),
+        ]
+        for aspect in ReceiptAspect.allCases {
+            let image = try #require(ReceiptRenderer.cgImage(
+                data: data, style: .thermal, palette: ReceiptStyle.thermal.basePalette,
+                posterMode: .duotone, poster: nil, aspect: aspect
+            ))
+            #expect(image.width == expected[aspect]?.0, "\(aspect.displayName) 宽度异常")
+            #expect(image.height == expected[aspect]?.1, "\(aspect.displayName) 高度异常")
+            // 画布尺寸与导出倍率必须自洽，避免出现 1080 宽之外的尺寸。
+            #expect(Int(aspect.size.width * aspect.exportScale) == 1080)
+        }
+    }
+
+    @Test("三款比例 × 七款版式全部导出成功，且内容不越界（图非空白）")
+    func aspectsCoverAllLayouts() throws {
+        let data = ReceiptData.build(from: MovieDetail(
+            id: 4, title: "长标题比例组合测试：沙丘第二部", originalTitle: "Dune: Part Two",
+            dateString: "2024-02-29", voteAverage: 8.3, voteCount: 5600,
+            genres: [Genre(id: 878, name: "科幻")], tagline: "Long live the fighters.",
+            credits: Credits(cast: [CastMember(id: 1, name: "甲")]),
+            runtime: 166, budget: 190_000_000, revenue: 714_000_000
+        ))
+        for aspect in ReceiptAspect.allCases {
+            for layout in ReceiptLayout.allCases {
+                let image = try #require(ReceiptRenderer.cgImage(
+                    data: data, style: .midnight, palette: ReceiptStyle.midnight.basePalette,
+                    posterMode: .duotone, poster: nil, layout: layout, aspect: aspect
+                ), "\(aspect.displayName) × \(layout.displayName) 渲染失败")
+                #expect(image.width == 1080)
+                #expect(image.height == aspect.exportPixelSize.height)
+            }
+        }
+    }
+
+    @Test("短评与观影日期：空白不出现、开启后进字段表、日期按中文格式")
+    func tuningNoteAndWatchDate() {
+        var tuning = ReceiptTuning()
+        #expect(tuning.note == nil)
+        #expect(tuning.watchDateField == nil)
+
+        tuning.customNote = "   "
+        #expect(tuning.note == nil)
+
+        tuning.customNote = "  看完久久没缓过来  "
+        #expect(tuning.note == "看完久久没缓过来")
+
+        var components = DateComponents(year: 2026, month: 3, day: 7)
+        components.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        tuning.watchDate = Calendar(identifier: .gregorian).date(from: components) ?? Date()
+        tuning.showsWatchDate = true
+        let field = tuning.watchDateField
+        #expect(field?.label == "观影")
+        #expect(field?.value == "2026 年 3 月 7 日")
+    }
+
+    @Test("带短评与观影日期的卡在 9:16 长画布上照样导出")
+    func rendersNoteOnStoryCanvas() throws {
+        let data = ReceiptData.build(from: MovieDetail(
+            id: 5, title: "短评测试", dateString: "2023-10-20",
+            voteAverage: 7.9, voteCount: 320, runtime: 118
+        ))
+        let tuning = ReceiptTuning(
+            customNote: "把结局留白的力量拍出来了",
+            showsWatchDate: true,
+            watchDate: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        let image = try #require(ReceiptRenderer.cgImage(
+            data: data, style: .solarized, palette: ReceiptStyle.solarized.basePalette,
+            posterMode: .duotone, poster: nil, layout: .magazine, aspect: .story, tuning: tuning
+        ))
+        #expect(image.width == 1080)
+        #expect(image.height == 1920)
     }
 }

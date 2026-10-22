@@ -14,6 +14,66 @@ enum ReceiptCanvas {
     }
 }
 
+/// 分享卡画布比例（v1.33）：3:4 之外新增 1:1 与 9:16，适配小红书封面与 Story / 状态。
+///
+/// 三款比例共用同一套内容与内缩留白：1:1 只加宽（高度仍为 720pt，纵向排布与 3:4 完全一致），
+/// 9:16 只加高（多出来的高度由各版式既有的弹性间距吸收，页脚仍贴底），
+/// 因此七款版式 × 十八款配色 × 细节调节都能原样套用，不需要为比例单独写分支。
+enum ReceiptAspect: String, CaseIterable, Identifiable, Hashable, Sendable {
+    /// 3:4 竖版（v1.2 起的默认比例，朋友圈）。
+    case portrait
+    /// 1:1 方形（小红书封面）。
+    case square
+    /// 9:16 长竖版（Story / 状态）。
+    case story
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .portrait: "3:4"
+        case .square: "1:1"
+        case .story: "9:16"
+        }
+    }
+
+    var hint: String {
+        switch self {
+        case .portrait: "竖版，适合朋友圈"
+        case .square: "方形，适合小红书封面"
+        case .story: "长竖版，适合 Story / 状态"
+        }
+    }
+
+    /// 画布尺寸（pt）。
+    var size: CGSize {
+        switch self {
+        case .portrait: ReceiptCanvas.size
+        case .square: CGSize(width: 720, height: 720)
+        case .story: CGSize(width: 540, height: 960)
+        }
+    }
+
+    /// 导出倍率（三款比例都落到 1080 宽）。
+    var exportScale: CGFloat {
+        switch self {
+        case .portrait: ReceiptCanvas.exportScale
+        case .square: 1.5
+        case .story: 2
+        }
+    }
+
+    /// 导出像素尺寸。
+    var exportPixelSize: (width: Int, height: Int) {
+        (Int(size.width * exportScale), Int(size.height * exportScale))
+    }
+
+    /// 面板上展示的尺寸文案，如「1:1 · 1080×1080」。
+    var exportText: String {
+        "\(displayName) · \(exportPixelSize.width)×\(exportPixelSize.height)"
+    }
+}
+
 /// 分享卡版式（v1.28 起）：配色之外的第二个维度，只改排版，不改调色板。
 enum ReceiptLayout: String, CaseIterable, Identifiable, Hashable, Sendable {
     /// 海报居中、信息在下（v1.2 起的默认版式）。
@@ -128,12 +188,33 @@ struct ReceiptTuning: Hashable, Sendable {
     var customTagline: String = ""
     /// 页脚品牌行（"显影 · 本地元数据 · 非商业分享"）。
     var showsWatermark: Bool = true
+    /// 短评（v1.33，最多 40 字）；为空时整行不渲染。
+    var customNote: String = ""
+    /// 是否印观影日期（v1.33，默认关）。
+    var showsWatchDate: Bool = false
+    /// 观影日期（仅 `showsWatchDate` 开启时印成字段表最后一行）。
+    var watchDate: Date = Date()
 
     static let standard = ReceiptTuning()
 
     /// 按档位缩放字号；取整避免半像素在导出时糊边。
     func size(_ base: CGFloat) -> CGFloat {
         (base * typeScale.factor).rounded()
+    }
+
+    /// 短评内容：空白视为未填。
+    var note: String? {
+        let trimmed = customNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// 观影日期行（关闭时为 nil，字段表不出现这一行）。
+    var watchDateField: ReceiptField? {
+        guard showsWatchDate else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy 年 M 月 d 日"
+        return ReceiptField(label: "观影", value: formatter.string(from: watchDate))
     }
 
     /// 页脚标语：自定义优先，空白视为未填。
@@ -153,8 +234,25 @@ struct ReceiptCardView: View {
     let poster: CGImage?
     /// 版式（v1.28；默认经典版式）。
     var layout: ReceiptLayout = .classic
+    /// 画布比例（v1.33；默认 3:4）。
+    var aspect: ReceiptAspect = .portrait
     /// 细节调节（v1.30；默认标准字号 + 标准边距 + 水印开）。
     var tuning: ReceiptTuning = .standard
+
+    /// 当前画布尺寸（版式内部按它取相对尺寸，比例变化时不必改排版）。
+    private var canvasSize: CGSize { aspect.size }
+
+    /// 横向内缩：比 3:4 更宽的画布（1:1）把多出来的宽度平分成左右留白，
+    /// 让文字栏宽度与 3:4 完全一致，避免字段表被拉得过宽。
+    private var hInset: CGFloat {
+        tuning.margin.horizontalInset + max(0, (canvasSize.width - ReceiptCanvas.size.width) / 2)
+    }
+
+    /// 字段表：数据自带的字段 + 可选的「观影」行（其余自定义内容走页脚）。
+    private var allFields: [ReceiptField] {
+        guard let watchDate = tuning.watchDateField else { return data.fields }
+        return data.fields + [watchDate]
+    }
 
     var body: some View {
         ZStack {
@@ -162,7 +260,7 @@ struct ReceiptCardView: View {
             overlayDecoration
             content
         }
-        .frame(width: ReceiptCanvas.size.width, height: ReceiptCanvas.size.height)
+        .frame(width: canvasSize.width, height: canvasSize.height)
         .overlay(alignment: .bottom) { fingerprintStrip }
         .clipShape(Rectangle())
     }
@@ -212,7 +310,7 @@ struct ReceiptCardView: View {
                 if style.decoration == .ledgerStamp { ledgerStamp }
                 footer
             }
-            .padding(.horizontal, tuning.margin.horizontalInset)
+            .padding(.horizontal, hInset)
         }
         // 上下留白放在最外层：色带 / 报头等装饰同样内缩 28，四款观感一致。
         .padding(.vertical, tuning.margin.verticalInset)
@@ -248,11 +346,11 @@ struct ReceiptCardView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, tuning.margin.horizontalInset)
+            .padding(.horizontal, hInset)
             .padding(.top, 22)
             Spacer(minLength: 12)
             footer
-                .padding(.horizontal, tuning.margin.horizontalInset)
+                .padding(.horizontal, hInset)
         }
         .padding(.vertical, tuning.margin.verticalInset)
     }
@@ -270,7 +368,7 @@ struct ReceiptCardView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: 420)
+            .frame(height: canvasSize.height * 0.583)
             .frame(maxHeight: .infinity, alignment: .bottom)
 
             VStack(spacing: 0) {
@@ -299,7 +397,7 @@ struct ReceiptCardView: View {
                     footer
                         .padding(.top, 8)
                 }
-                .padding(.horizontal, tuning.margin.horizontalInset)
+                .padding(.horizontal, hInset)
                 .padding(.bottom, tuning.margin.verticalInset)
             }
             .padding(.top, tuning.margin.verticalInset)
@@ -351,7 +449,7 @@ struct ReceiptCardView: View {
                 Spacer(minLength: 10)
                 footer
             }
-            .padding(.horizontal, tuning.margin.horizontalInset)
+            .padding(.horizontal, hInset)
         }
         .padding(.vertical, tuning.margin.verticalInset)
     }
@@ -367,7 +465,7 @@ struct ReceiptCardView: View {
     private var magazineContent: some View {
         VStack(spacing: 0) {
             topDecoration
-            bleedPoster(size: CGSize(width: ReceiptCanvas.size.width, height: 250))
+            bleedPoster(size: CGSize(width: canvasSize.width, height: canvasSize.height * 0.347))
             HStack(alignment: .top, spacing: 26) {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(data.title)
@@ -398,12 +496,12 @@ struct ReceiptCardView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, tuning.margin.horizontalInset)
+            .padding(.horizontal, hInset)
             .padding(.top, 22)
 
             Spacer(minLength: 10)
             footer
-                .padding(.horizontal, tuning.margin.horizontalInset)
+                .padding(.horizontal, hInset)
         }
         .padding(.top, tuning.margin.verticalInset)
         .padding(.bottom, tuning.margin.verticalInset)
@@ -449,7 +547,7 @@ struct ReceiptCardView: View {
                 Spacer(minLength: 0)
                 footer
             }
-            .padding(.horizontal, tuning.margin.horizontalInset)
+            .padding(.horizontal, hInset)
         }
         .padding(.vertical, tuning.margin.verticalInset)
     }
@@ -488,12 +586,12 @@ struct ReceiptCardView: View {
                 // 给票根的虚线副券留出右边距，竖排字不压线。
                 .padding(.trailing, 20)
             }
-            .padding(.horizontal, tuning.margin.horizontalInset)
+            .padding(.horizontal, hInset)
             .padding(.top, 18)
 
             Spacer(minLength: 12)
             footer
-                .padding(.horizontal, tuning.margin.horizontalInset)
+                .padding(.horizontal, hInset)
         }
         .padding(.vertical, tuning.margin.verticalInset)
     }
@@ -560,7 +658,7 @@ struct ReceiptCardView: View {
                 Rectangle().fill(palette.ink.color).frame(height: 4)
                 Rectangle().fill(palette.accent.color).frame(height: 2)
             }
-            .padding(.horizontal, tuning.margin.horizontalInset)
+            .padding(.horizontal, hInset)
         case .horizon:
             horizonDecoration
         case .slate:
@@ -749,7 +847,7 @@ struct ReceiptCardView: View {
 
     /// 全幅版式用：海报铺满整卡（无海报时同样用双色调占位）。
     private var fullBleedPoster: some View {
-        bleedPoster(size: ReceiptCanvas.size)
+        bleedPoster(size: canvasSize)
     }
 
     /// 出血海报：按给定尺寸铺满并裁切（杂志版式的横幅也走这一支）。
@@ -829,13 +927,13 @@ struct ReceiptCardView: View {
 
     private var fieldsBlock: some View {
         VStack(spacing: 0) {
-            if !data.fields.isEmpty {
+            if !allFields.isEmpty {
                 Rectangle()
                     .fill(palette.accent.color)
                     .frame(height: 2)
                     .padding(.bottom, 4)
             }
-            ForEach(data.fields) { field in
+            ForEach(allFields) { field in
                 HStack(alignment: .firstTextBaseline, spacing: 16) {
                     Text(field.label.uppercased())
                         .font(.system(size: tuning.size(11), weight: .bold))
@@ -863,13 +961,13 @@ struct ReceiptCardView: View {
     /// 紧凑字段表（侧栏 / 全幅 / 索引用；行高比经典版式小一档）。
     private var compactFields: some View {
         VStack(spacing: 0) {
-            if !data.fields.isEmpty {
+            if !allFields.isEmpty {
                 Rectangle()
                     .fill(palette.accent.color)
                     .frame(height: 2)
                     .padding(.bottom, 3)
             }
-            ForEach(data.fields) { field in
+            ForEach(allFields) { field in
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text(field.label.uppercased())
                         .font(.system(size: tuning.size(10), weight: .bold))
@@ -900,6 +998,14 @@ struct ReceiptCardView: View {
             Rectangle()
                 .fill(palette.ink.color.opacity(0.16))
                 .frame(height: 1)
+            if let note = tuning.note {
+                // 短评（v1.33）：带引号的一句话，压在标语上方。
+                Text("「\(note)」")
+                    .font(.system(size: tuning.size(12)))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .foregroundStyle(palette.ink.color.opacity(0.85))
+            }
             if let tagline {
                 Text(tagline)
                     .font(.system(size: tuning.size(12)))
@@ -929,7 +1035,7 @@ struct ReceiptCardView: View {
 /// 分享卡渲染与导出（`ImageRenderer`）。
 @MainActor
 enum ReceiptRenderer {
-    /// 导出尺寸的位图（1080×1440）。
+    /// 导出尺寸的位图（默认 1080×1440；比例见 `ReceiptAspect`）。
     static func cgImage(
         data: ReceiptData,
         style: ReceiptStyle,
@@ -937,15 +1043,16 @@ enum ReceiptRenderer {
         posterMode: ReceiptPosterMode,
         poster: CGImage?,
         layout: ReceiptLayout = .classic,
+        aspect: ReceiptAspect = .portrait,
         tuning: ReceiptTuning = .standard
     ) -> CGImage? {
         let renderer = ImageRenderer(
             content: ReceiptCardView(
                 data: data, style: style, palette: palette, posterMode: posterMode,
-                poster: poster, layout: layout, tuning: tuning
+                poster: poster, layout: layout, aspect: aspect, tuning: tuning
             )
         )
-        renderer.scale = ReceiptCanvas.exportScale
+        renderer.scale = aspect.exportScale
         return renderer.cgImage
     }
 
@@ -956,11 +1063,12 @@ enum ReceiptRenderer {
         posterMode: ReceiptPosterMode,
         poster: CGImage?,
         layout: ReceiptLayout = .classic,
+        aspect: ReceiptAspect = .portrait,
         tuning: ReceiptTuning = .standard
     ) -> Data? {
         guard let image = cgImage(
             data: data, style: style, palette: palette, posterMode: posterMode,
-            poster: poster, layout: layout, tuning: tuning
+            poster: poster, layout: layout, aspect: aspect, tuning: tuning
         ) else { return nil }
         return pngData(from: image)
     }
