@@ -99,9 +99,64 @@
         "vote_average": 5.456,
         "vote_count": 8,
         "width": 3840
+      },
+      {
+        "aspect_ratio": 1.5,
+        "height": 2000,
+        "iso_639_1": "en",
+        "file_path": "/stillTwo.jpg",
+        "vote_average": 4.1,
+        "vote_count": 2,
+        "width": 3000
+      },
+      {
+        "aspect_ratio": 0.667,
+        "height": 3000,
+        "iso_639_1": null,
+        "file_path": "/backdropButPosterShape.jpg",
+        "vote_average": 5.9,
+        "vote_count": 1,
+        "width": 2000
       }
     ],
-    "posters": []
+    "posters": [
+      {
+        "aspect_ratio": 0.667,
+        "height": 3000,
+        "iso_639_1": "zh",
+        "file_path": "/posterZh.jpg",
+        "vote_average": 5.9,
+        "vote_count": 6,
+        "width": 2000
+      },
+      {
+        "aspect_ratio": 0.667,
+        "height": 2250,
+        "iso_639_1": null,
+        "file_path": "/posterNoText.jpg",
+        "vote_average": 5.2,
+        "vote_count": 4,
+        "width": 1500
+      },
+      {
+        "aspect_ratio": 0.7,
+        "height": 1500,
+        "iso_639_1": "en",
+        "file_path": "/posterEn.jpg",
+        "vote_average": 3.8,
+        "vote_count": 1,
+        "width": 1050
+      },
+      {
+        "aspect_ratio": 1.0,
+        "height": 1000,
+        "iso_639_1": null,
+        "file_path": "/squareNotPoster.jpg",
+        "vote_average": 7.0,
+        "vote_count": 9,
+        "width": 1000
+      }
+    ]
   },
   "recommendations": {
     "page": 1,

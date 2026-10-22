@@ -640,6 +640,8 @@ struct MediaDetailScaffold<Detail: MediaDetail, Facts: View, Extra: View>: View 
 
     @Environment(AppEnvironment.self) private var appEnv
     @State private var isOverviewExpanded = false
+    /// 图片画廊（v1.22）：nil 表示未打开。
+    @State private var gallery: GalleryRequest?
 
     private var summary: MediaSummary? {
         if let detail {
@@ -696,6 +698,9 @@ struct MediaDetailScaffold<Detail: MediaDetail, Facts: View, Extra: View>: View 
             }
         }
         .background(UI.Palette.bg)
+        .sheet(item: $gallery) { request in
+            ImageGallerySheet(request: request)
+        }
         .toolbar {
             if let summary, summary.mediaKind.isLibraryEligible {
                 ToolbarItemGroup(placement: .primaryAction) {
@@ -776,6 +781,14 @@ struct MediaDetailScaffold<Detail: MediaDetail, Facts: View, Extra: View>: View 
                     .contextMenu {
                         MediaContextMenu(summary: summary, details: detail?.libraryDetails)
                     }
+                    .onTapGesture {
+                        // 点主海报看全部海报（v1.22）；没有画廊数据时保持原行为。
+                        let posters = detail?.images?.galleryPosters ?? []
+                        guard !posters.isEmpty else { return }
+                        let start = posters.firstIndex { $0.filePath == summary.posterPath } ?? 0
+                        openGallery(.posters, index: start)
+                    }
+                    .help("查看全部海报")
                     .accessibilityHidden(true)
             }
 
@@ -823,7 +836,7 @@ struct MediaDetailScaffold<Detail: MediaDetail, Facts: View, Extra: View>: View 
                 overviewSection(detail)
                 watchSection(detail)
                 creditsSection(detail)
-                railSection(title: "剧照", items: detail.images?.stills.map(\.filePath) ?? [], width: 168, height: 95, cornerRadius: 4)
+                stillsSection(detail)
                 railSection(title: "相似", media: detail.similar ?? [], open: openSummary)
                 railSection(title: "推荐", media: detail.recommendations ?? [], open: openSummary)
             }
@@ -905,21 +918,61 @@ struct MediaDetailScaffold<Detail: MediaDetail, Facts: View, Extra: View>: View 
         }
     }
 
+    /// 剧照 rail（v1.22）：缩略图条 + 标题右侧「全部 N 张」，点任意一张进画廊。
     @ViewBuilder
-    private func railSection(title: String, items: [String], width: CGFloat, height: CGFloat, cornerRadius: CGFloat) -> some View {
-        if !items.isEmpty {
+    private func stillsSection(_ detail: Detail) -> some View {
+        let stills = detail.images?.allStills ?? []
+        if !stills.isEmpty {
+            let preview = Array(stills.prefix(8))
             VStack(alignment: .leading, spacing: UI.Spacing.s3) {
-                SectionHeader(title: title)
+                HStack(alignment: .top) {
+                    SectionHeader(title: "剧照")
+                    Spacer()
+                    if stills.count > preview.count {
+                        Button("全部 \(stills.count) 张") { openGallery(.stills, index: 0) }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 12))
+                            .foregroundStyle(UI.Palette.accent)
+                            .padding(.top, 2)
+                            .help("打开图片画廊，可用左右方向键翻页")
+                    }
+                }
+
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: UI.Spacing.s2) {
-                        ForEach(items, id: \.self) { path in
-                            PosterImage(path: path, displayWidth: width, cornerRadius: cornerRadius)
-                                .frame(width: width, height: height)
+                        ForEach(Array(preview.enumerated()), id: \.element.id) { offset, asset in
+                            Button {
+                                openGallery(.stills, index: offset)
+                            } label: {
+                                PosterImage(path: asset.filePath, displayWidth: 168, cornerRadius: 4)
+                                    .frame(width: 168, height: 95)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                            .strokeBorder(UI.Palette.border, lineWidth: 1)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .help(asset.galleryCaption ?? "查看这张剧照")
                         }
                     }
                 }
             }
         }
+    }
+
+    /// 打开画廊：把当前详情的剧照与海报一起交给画廊，便于在里面切换。
+    private func openGallery(_ kind: GalleryKind, index: Int) {
+        guard let detail, let images = detail.images else { return }
+        let stills = images.allStills
+        let posters = images.galleryPosters
+        guard !(kind == .stills ? stills : posters).isEmpty else { return }
+        gallery = GalleryRequest(
+            title: detail.title,
+            stills: stills,
+            posters: posters,
+            initialKind: kind,
+            initialIndex: index
+        )
     }
 
     @ViewBuilder

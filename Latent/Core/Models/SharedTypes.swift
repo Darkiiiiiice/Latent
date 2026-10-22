@@ -228,12 +228,20 @@ struct MediaImages: Codable, Sendable, Hashable {
         self.logos = (try? container.decodeIfPresent([ImageAsset].self, forKey: .logos)) ?? nil
     }
 
-    /// 剧照 rail（按宽高比过滤掉海报比例图，最多 20 张）。
-    var stills: [ImageAsset] {
+    /// 全部横图剧照（宽高比 ≥ 1.5；画廊用，rail 只取前 20）。
+    var allStills: [ImageAsset] {
         (backdrops ?? [])
             .filter { ($0.aspectRatio ?? 1.78) >= 1.5 }
-            .prefix(20)
-            .map { $0 }
+    }
+
+    /// 剧照 rail（按宽高比过滤掉海报比例图，最多 20 张）。
+    var stills: [ImageAsset] {
+        Array(allStills.prefix(20))
+    }
+
+    /// 海报画廊（竖图 ≤ 0.75 宽高比；最多 60 张，v1.22）。
+    var galleryPosters: [ImageAsset] {
+        Array((posters ?? []).filter { ($0.aspectRatio ?? 0.667) <= 0.75 }.prefix(60))
     }
 }
 
@@ -249,10 +257,12 @@ struct ImageAsset: Codable, Sendable, Identifiable, Hashable {
     var id: String { filePath }
 
     private enum CodingKeys: String, CodingKey {
-        case width, height, language
+        case width, height
         case filePath = "file_path"
         case aspectRatio = "aspect_ratio"
         case voteAverage = "vote_average"
+        // TMDB 的图片语言字段是 `iso_639_1`，null 表示图上没有文字。
+        case language = "iso_639_1"
     }
 
     init(filePath: String, width: Int? = nil, height: Int? = nil, aspectRatio: Double? = nil, voteAverage: Double? = nil, language: String? = nil) {
@@ -272,5 +282,23 @@ struct ImageAsset: Codable, Sendable, Identifiable, Hashable {
         self.aspectRatio = (try? container.decodeIfPresent(Double.self, forKey: .aspectRatio)) ?? nil
         self.voteAverage = (try? container.decodeIfPresent(Double.self, forKey: .voteAverage)) ?? nil
         self.language = (try? container.decodeIfPresent(String.self, forKey: .language)) ?? nil
+    }
+
+    /// 像素尺寸文案（如「3840 × 2160」）；缺尺寸时为 nil。
+    var sizeLabel: String? {
+        guard let width, let height else { return nil }
+        return "\(width) × \(height)"
+    }
+
+    /// 语言标签：TMDB 用 nil 表示图上无文字，空串同样按无文字处理。
+    var languageLabel: String? {
+        guard let language, !language.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return Locale.current.localizedString(forLanguageCode: language) ?? language
+    }
+
+    /// 画廊说明行：尺寸 + 语言（无语言时标「无文字」）；两者都缺时不显示。
+    var galleryCaption: String? {
+        let parts = [sizeLabel, languageLabel ?? (sizeLabel == nil ? nil : "无文字")].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }

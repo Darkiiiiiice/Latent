@@ -75,8 +75,8 @@ struct DecodingTests {
         #expect(detail.revenue == 714_444_358)
         #expect(detail.credits?.directors.first?.name == "丹尼斯·维伦纽瓦")
         #expect(detail.externalIDs?.imdbID == "tt15239678")
-        // 海报比例（0.667）的 backdrop 不应进入剧照 rail（fixture 里只有一张 1.778）
-        #expect(detail.images?.stills.count == 1)
+        // 海报比例（0.667）的 backdrop 不应进入剧照 rail（fixture 里有两张横图）
+        #expect(detail.images?.stills.count == 2)
         #expect(detail.similar?.count == 1)
         #expect(detail.recommendations?.count == 1)
         #expect(detail.watchProviders?.region(for: nil)?.code == "CN")
@@ -206,6 +206,34 @@ struct DecodingTests {
         #expect(minimal.homepage == nil)
         #expect(minimal.parentCompany == nil)
         #expect(minimal.countryName == nil)
+    }
+
+    @Test("图片画廊：剧照 / 海报过滤与说明行（v1.22）")
+    func imageGallery() throws {
+        let detail = try decoder.decode(MovieDetail.self, from: Fixtures.data("movie_detail"))
+        let images = try #require(detail.images)
+
+        // 竖版 backdrop 不进剧照；1:1 的 poster 不进海报画廊。
+        #expect(images.allStills.count == 2)
+        #expect(images.allStills.map(\.filePath) == ["/xOMo8BRK7PfcJv9JCnx7s5hj0PX.jpg", "/stillTwo.jpg"])
+        #expect(images.stills.count == 2)
+        #expect(images.galleryPosters.count == 3)
+        #expect(images.galleryPosters.map(\.filePath) == ["/posterZh.jpg", "/posterNoText.jpg", "/posterEn.jpg"])
+
+        let first = try #require(images.allStills.first)
+        #expect(first.sizeLabel == "3840 × 2160")
+        // 无语言标注按「无文字」处理（TMDB 用 null 表示图上没有文字）。
+        #expect(first.galleryCaption == "3840 × 2160 · 无文字")
+        #expect(first.languageLabel == nil)
+
+        let translated = try #require(images.allStills.last)
+        #expect(translated.languageLabel != nil)
+        #expect(translated.galleryCaption?.hasPrefix("3000 × 2000 · ") == true)
+
+        // 既无尺寸也无语言时不显示说明行。
+        let bare = ImageAsset(filePath: "/bare.jpg")
+        #expect(bare.galleryCaption == nil)
+        #expect(bare.languageLabel == nil)
     }
 
     @Test("系列详情：缺 parts / 缺 id 不崩")
