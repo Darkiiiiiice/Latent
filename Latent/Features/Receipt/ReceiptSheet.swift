@@ -16,6 +16,8 @@ struct ReceiptSheet: View {
     @State private var keepsPosterColors = false
     /// 卡片配色取自封面（默认关：保持十八款锁定配色）。开启后用封面主色 / 辅色重算整卡配色。
     @State private var followsPoster = false
+    /// 细节调节（v1.30）：字号 / 边距 / 页脚标语 / 水印。
+    @State private var tuning = ReceiptTuning.standard
     @State private var poster: CGImage?
     @State private var posterColors: ReceiptPosterColors?
     @State private var exportDocument: ReceiptImageDocument?
@@ -32,9 +34,11 @@ struct ReceiptSheet: View {
         keepsPosterColors ? .original : style.posterMode
     }
 
-    /// 重新生成系统分享图的触发键：版式 / 风格 / 两个开关 / 海报是否就位。
+    /// 重新生成系统分享图的触发键：版式 / 风格 / 两个开关 / 细节调节 / 海报是否就位。
     private var shareKey: String {
-        "\(layout.rawValue)|\(style.rawValue)|\(keepsPosterColors)|\(followsPoster)|\(poster != nil)"
+        "\(layout.rawValue)|\(style.rawValue)|\(keepsPosterColors)|\(followsPoster)"
+            + "|\(tuning.typeScale.rawValue)|\(tuning.margin.rawValue)"
+            + "|\(tuning.customTagline)|\(tuning.showsWatermark)|\(poster != nil)"
     }
 
     private let previewScale: CGFloat = 0.6
@@ -96,7 +100,7 @@ struct ReceiptSheet: View {
     private var preview: some View {
         ReceiptCardView(
             data: data, style: style, palette: palette, posterMode: posterMode,
-            poster: poster, layout: layout
+            poster: poster, layout: layout, tuning: tuning
         )
             .scaleEffect(previewScale, anchor: .topLeading)
             .frame(
@@ -134,7 +138,7 @@ struct ReceiptSheet: View {
                 }
                 .padding(.trailing, 2)
             }
-            .frame(height: 260)
+            .frame(height: 220)
 
             Text("封面")
                 .font(.system(size: 12, weight: .medium))
@@ -152,6 +156,8 @@ struct ReceiptSheet: View {
             .foregroundStyle(UI.Palette.textPrimary)
             .disabled(poster == nil)
 
+            detailControls
+
             Text("缺字段的行不显示。")
                 .font(.system(size: 11))
                 .foregroundStyle(UI.Palette.textSecondary)
@@ -159,6 +165,55 @@ struct ReceiptSheet: View {
             Spacer(minLength: 0)
         }
         .frame(width: 340, alignment: .leading)
+    }
+
+    /// 细节调节（v1.30）：字号 / 边距 / 页脚标语 / 水印。
+    private var detailControls: some View {
+        VStack(alignment: .leading, spacing: UI.Spacing.s2) {
+            HStack(spacing: UI.Spacing.s3) {
+                VStack(alignment: .leading, spacing: UI.Spacing.s1) {
+                    Text("字号")
+                        .font(.system(size: 11))
+                        .foregroundStyle(UI.Palette.textSecondary)
+                    Picker("字号", selection: $tuning.typeScale) {
+                        ForEach(ReceiptTuning.TypeScale.allCases) { scale in
+                            Text(scale.displayName).tag(scale)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
+                VStack(alignment: .leading, spacing: UI.Spacing.s1) {
+                    Text("边距")
+                        .font(.system(size: 11))
+                        .foregroundStyle(UI.Palette.textSecondary)
+                    Picker("边距", selection: $tuning.margin) {
+                        ForEach(ReceiptTuning.Margin.allCases) { margin in
+                            Text(margin.displayName).tag(margin)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
+            }
+
+            TextField("页脚标语（留空用影片标语）", text: $tuning.customTagline)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 12))
+                .onChange(of: tuning.customTagline) { _, newValue in
+                    let limited = String(newValue.prefix(24))
+                    if limited != newValue {
+                        tuning.customTagline = limited
+                    }
+                }
+
+            Toggle("显示页脚水印", isOn: $tuning.showsWatermark)
+                .help("页脚那行「显影 · 本地元数据 · 非商业分享」")
+        }
+        .toggleStyle(.switch)
+        .controlSize(.small)
+        .font(.system(size: 12))
+        .foregroundStyle(UI.Palette.textPrimary)
     }
 
     private var layoutPicker: some View {
@@ -271,7 +326,7 @@ struct ReceiptSheet: View {
     private func updateShareImage() {
         guard let image = ReceiptRenderer.cgImage(
             data: data, style: style, palette: palette, posterMode: posterMode,
-            poster: poster, layout: layout
+            poster: poster, layout: layout, tuning: tuning
         ) else {
             shareImage = nil
             return
@@ -282,7 +337,7 @@ struct ReceiptSheet: View {
     private func copyToPasteboard() {
         guard let image = ReceiptRenderer.cgImage(
             data: data, style: style, palette: palette, posterMode: posterMode,
-            poster: poster, layout: layout
+            poster: poster, layout: layout, tuning: tuning
         ) else {
             ToastCenter.shared.show("分享卡生成失败")
             return
@@ -296,7 +351,7 @@ struct ReceiptSheet: View {
     private func save() {
         guard let png = ReceiptRenderer.pngData(
             data: data, style: style, palette: palette, posterMode: posterMode,
-            poster: poster, layout: layout
+            poster: poster, layout: layout, tuning: tuning
         ) else {
             ToastCenter.shared.show("分享卡生成失败")
             return

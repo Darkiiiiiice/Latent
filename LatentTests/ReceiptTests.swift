@@ -471,6 +471,62 @@ struct ReceiptTests {
         }
     }
 
+    @Test("字号档位单调递增：紧凑 < 标准 < 放大，放大上限压到 1.08")
+    func tuningScalesType() {
+        let compact = ReceiptTuning(typeScale: .compact)
+        let regular = ReceiptTuning(typeScale: .regular)
+        let large = ReceiptTuning(typeScale: .large)
+
+        #expect(compact.size(26) < regular.size(26))
+        #expect(regular.size(26) < large.size(26))
+        #expect(large.size(46) <= 50)
+        #expect(ReceiptTuning.TypeScale.allCases.allSatisfy { !$0.displayName.isEmpty })
+        #expect(ReceiptTuning.Margin.allCases.allSatisfy { !$0.displayName.isEmpty })
+    }
+
+    @Test("页脚标语：自定义优先，空白视为未填；水印开关默认开")
+    func tuningTaglineOverrides() {
+        var tuning = ReceiptTuning()
+        #expect(tuning.showsWatermark)
+        #expect(tuning.tagline(fallback: "原标语") == "原标语")
+
+        tuning.customTagline = "   "
+        #expect(tuning.tagline(fallback: "原标语") == "原标语")
+
+        tuning.customTagline = "今晚看这部"
+        #expect(tuning.tagline(fallback: "原标语") == "今晚看这部")
+        #expect(tuning.tagline(fallback: nil) == "今晚看这部")
+    }
+
+    @Test("字号 × 边距的极端组合同样导出 1080×1440")
+    func rendersTuningExtremes() {
+        let detail = MovieDetail(
+            id: 7, title: "六字段测试", originalTitle: "Six Fields",
+            dateString: "2024-01-01", voteAverage: 8.0, voteCount: 999,
+            genres: [Genre(id: 18, name: "剧情")],
+            credits: Credits(
+                cast: [CastMember(id: 1, name: "甲"), CastMember(id: 2, name: "乙")],
+                crew: [CrewMember(id: 3, name: "丙", job: "Director", department: "Directing")]
+            ),
+            runtime: 128
+        )
+        let data = ReceiptData.build(from: detail)
+        #expect(data.fields.count >= 5)
+
+        let combos: [ReceiptTuning] = [
+            ReceiptTuning(typeScale: .compact, margin: .tight),
+            ReceiptTuning(typeScale: .large, margin: .roomy, customTagline: "自定义标语", showsWatermark: false),
+        ]
+        for tuning in combos {
+            let image = ReceiptRenderer.cgImage(
+                data: data, style: .thermal, palette: ReceiptStyle.thermal.basePalette,
+                posterMode: .duotone, poster: nil, layout: .classic, tuning: tuning
+            )
+            #expect(image?.width == 1080)
+            #expect(image?.height == 1440)
+        }
+    }
+
     @Test("剧集 / 人物卡同样导出 1080×1440")
     func rendersTVAndPersonExportSize() {
         let tv = ReceiptData.build(from: TVShowDetail(

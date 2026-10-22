@@ -59,6 +59,90 @@ enum ReceiptLayout: String, CaseIterable, Identifiable, Hashable, Sendable {
     }
 }
 
+/// 分享卡细节调节（v1.30）：字号 / 边距 / 页脚标语 / 水印，叠在版式与配色之上。
+///
+/// 只调文字与留白，不动海报尺寸与画布比例，因此七款版式 × 十八款配色都能沿用。
+struct ReceiptTuning: Hashable, Sendable {
+    /// 字号档位（百分比作用于标题、字段与页脚文字）。
+    enum TypeScale: String, CaseIterable, Identifiable, Hashable, Sendable {
+        case compact
+        case regular
+        case large
+
+        var id: String { rawValue }
+
+        var displayName: String {
+            switch self {
+            case .compact: "紧凑"
+            case .regular: "标准"
+            case .large: "放大"
+            }
+        }
+
+        /// 放大上限压到 1.08：经典版式在六字段 + 放大时刚好填满画布，再大就会被裁。
+        var factor: CGFloat {
+            switch self {
+            case .compact: 0.92
+            case .regular: 1.0
+            case .large: 1.08
+            }
+        }
+    }
+
+    /// 边距档位（左右内缩与上下留白）。
+    enum Margin: String, CaseIterable, Identifiable, Hashable, Sendable {
+        case tight
+        case regular
+        case roomy
+
+        var id: String { rawValue }
+
+        var displayName: String {
+            switch self {
+            case .tight: "窄"
+            case .regular: "标准"
+            case .roomy: "宽"
+            }
+        }
+
+        var horizontalInset: CGFloat {
+            switch self {
+            case .tight: 32
+            case .regular: 44
+            case .roomy: 56
+            }
+        }
+
+        var verticalInset: CGFloat {
+            switch self {
+            case .tight: 20
+            case .regular: 28
+            case .roomy: 36
+            }
+        }
+    }
+
+    var typeScale: TypeScale = .regular
+    var margin: Margin = .regular
+    /// 自定义页脚标语（最多 24 字）；为空时用数据自带的 tagline。
+    var customTagline: String = ""
+    /// 页脚品牌行（"显影 · 本地元数据 · 非商业分享"）。
+    var showsWatermark: Bool = true
+
+    static let standard = ReceiptTuning()
+
+    /// 按档位缩放字号；取整避免半像素在导出时糊边。
+    func size(_ base: CGFloat) -> CGFloat {
+        (base * typeScale.factor).rounded()
+    }
+
+    /// 页脚标语：自定义优先，空白视为未填。
+    func tagline(fallback: String?) -> String? {
+        let custom = customTagline.trimmingCharacters(in: .whitespacesAndNewlines)
+        return custom.isEmpty ? fallback : custom
+    }
+}
+
 /// 分享卡本体：预览与导出共用同一张视图（所见即所得）。
 struct ReceiptCardView: View {
     let data: ReceiptData
@@ -69,6 +153,8 @@ struct ReceiptCardView: View {
     let poster: CGImage?
     /// 版式（v1.28；默认经典版式）。
     var layout: ReceiptLayout = .classic
+    /// 细节调节（v1.30；默认标准字号 + 标准边距 + 水印开）。
+    var tuning: ReceiptTuning = .standard
 
     var body: some View {
         ZStack {
@@ -107,10 +193,10 @@ struct ReceiptCardView: View {
                 if style.decoration == .ledgerStamp { ledgerStamp }
                 footer
             }
-            .padding(.horizontal, 44)
+            .padding(.horizontal, tuning.margin.horizontalInset)
         }
         // 上下留白放在最外层：色带 / 报头等装饰同样内缩 28，四款观感一致。
-        .padding(.vertical, 28)
+        .padding(.vertical, tuning.margin.verticalInset)
     }
 
     /// 侧栏：左海报、右标题与字段。
@@ -121,14 +207,14 @@ struct ReceiptCardView: View {
                 posterBlock(size: CGSize(width: 168, height: 252))
                 VStack(alignment: .leading, spacing: 0) {
                     Text(data.title)
-                        .font(.system(size: 23, weight: .bold))
+                        .font(.system(size: tuning.size(23), weight: .bold))
                         .lineLimit(3)
                         .minimumScaleFactor(0.7)
                         .foregroundStyle(palette.ink.color)
                         .fixedSize(horizontal: false, vertical: true)
                     if let original = data.originalTitle {
                         Text(original.uppercased())
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: tuning.size(10), weight: .medium))
                             .tracking(1.6)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
@@ -143,13 +229,13 @@ struct ReceiptCardView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 44)
+            .padding(.horizontal, tuning.margin.horizontalInset)
             .padding(.top, 22)
             Spacer(minLength: 12)
             footer
-                .padding(.horizontal, 44)
+                .padding(.horizontal, tuning.margin.horizontalInset)
         }
-        .padding(.vertical, 28)
+        .padding(.vertical, tuning.margin.verticalInset)
     }
 
     /// 全幅：海报铺满整卡，信息压在底部渐隐层上。
@@ -173,13 +259,13 @@ struct ReceiptCardView: View {
                 Spacer(minLength: 0)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(data.title)
-                        .font(.system(size: 24, weight: .bold))
+                        .font(.system(size: tuning.size(24), weight: .bold))
                         .lineLimit(2)
                         .minimumScaleFactor(0.7)
                         .foregroundStyle(palette.ink.color)
                     if let original = data.originalTitle {
                         Text(original.uppercased())
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: tuning.size(10), weight: .medium))
                             .tracking(1.6)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
@@ -194,10 +280,10 @@ struct ReceiptCardView: View {
                     footer
                         .padding(.top, 8)
                 }
-                .padding(.horizontal, 44)
-                .padding(.bottom, 28)
+                .padding(.horizontal, tuning.margin.horizontalInset)
+                .padding(.bottom, tuning.margin.verticalInset)
             }
-            .padding(.top, 28)
+            .padding(.top, tuning.margin.verticalInset)
         }
     }
 
@@ -209,18 +295,18 @@ struct ReceiptCardView: View {
                 HStack(alignment: .top, spacing: 24) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(indexLabel)
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: tuning.size(9), weight: .bold))
                             .tracking(2.4)
                             .foregroundStyle(palette.accent.color)
                         Text(data.title)
-                            .font(.system(size: 24, weight: .bold))
+                            .font(.system(size: tuning.size(24), weight: .bold))
                             .lineLimit(2)
                             .minimumScaleFactor(0.7)
                             .foregroundStyle(palette.ink.color)
                             .fixedSize(horizontal: false, vertical: true)
                         if let original = data.originalTitle {
                             Text(original.uppercased())
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.system(size: tuning.size(10), weight: .medium))
                                 .tracking(1.6)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
@@ -246,9 +332,9 @@ struct ReceiptCardView: View {
                 Spacer(minLength: 10)
                 footer
             }
-            .padding(.horizontal, 44)
+            .padding(.horizontal, tuning.margin.horizontalInset)
         }
-        .padding(.vertical, 28)
+        .padding(.vertical, tuning.margin.verticalInset)
     }
 
     private var indexLabel: String {
@@ -266,14 +352,14 @@ struct ReceiptCardView: View {
             HStack(alignment: .top, spacing: 26) {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(data.title)
-                        .font(.system(size: 25, weight: .bold))
+                        .font(.system(size: tuning.size(25), weight: .bold))
                         .lineLimit(3)
                         .minimumScaleFactor(0.65)
                         .foregroundStyle(palette.ink.color)
                         .fixedSize(horizontal: false, vertical: true)
                     if let original = data.originalTitle {
                         Text(original.uppercased())
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: tuning.size(10), weight: .medium))
                             .tracking(1.6)
                             .lineLimit(2)
                             .minimumScaleFactor(0.7)
@@ -293,15 +379,15 @@ struct ReceiptCardView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 44)
+            .padding(.horizontal, tuning.margin.horizontalInset)
             .padding(.top, 22)
 
             Spacer(minLength: 10)
             footer
-                .padding(.horizontal, 44)
+                .padding(.horizontal, tuning.margin.horizontalInset)
         }
-        .padding(.top, 28)
-        .padding(.bottom, 28)
+        .padding(.top, tuning.margin.verticalInset)
+        .padding(.bottom, tuning.margin.verticalInset)
     }
 
     /// 文字海报（v1.29）：不放海报，用超大标题占住视觉重心。
@@ -310,14 +396,14 @@ struct ReceiptCardView: View {
             topDecoration
             VStack(alignment: .leading, spacing: 0) {
                 Text(indexLabel)
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: tuning.size(9), weight: .bold))
                     .tracking(2.6)
                     .foregroundStyle(palette.accent.color)
 
                 Spacer(minLength: 0)
 
                 Text(data.title)
-                    .font(.system(size: 46, weight: .bold))
+                    .font(.system(size: tuning.size(46), weight: .bold))
                     .lineLimit(3)
                     .minimumScaleFactor(0.42)
                     .foregroundStyle(palette.ink.color)
@@ -325,7 +411,7 @@ struct ReceiptCardView: View {
 
                 if let original = data.originalTitle {
                     Text(original.uppercased())
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: tuning.size(11), weight: .medium))
                         .tracking(2)
                         .lineLimit(2)
                         .minimumScaleFactor(0.7)
@@ -344,9 +430,9 @@ struct ReceiptCardView: View {
                 Spacer(minLength: 0)
                 footer
             }
-            .padding(.horizontal, 44)
+            .padding(.horizontal, tuning.margin.horizontalInset)
         }
-        .padding(.vertical, 28)
+        .padding(.vertical, tuning.margin.verticalInset)
     }
 
     /// 竖排（v1.29）：封面在左、字段在其下，标题在右逐字向下排。
@@ -365,7 +451,7 @@ struct ReceiptCardView: View {
                     verticalTitle
                     if let original = data.originalTitle {
                         Text(original.uppercased())
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: tuning.size(10), weight: .medium))
                             .tracking(1.6)
                             .multilineTextAlignment(.trailing)
                             .lineLimit(2)
@@ -383,14 +469,14 @@ struct ReceiptCardView: View {
                 // 给票根的虚线副券留出右边距，竖排字不压线。
                 .padding(.trailing, 20)
             }
-            .padding(.horizontal, 44)
+            .padding(.horizontal, tuning.margin.horizontalInset)
             .padding(.top, 18)
 
             Spacer(minLength: 12)
             footer
-                .padding(.horizontal, 44)
+                .padding(.horizontal, tuning.margin.horizontalInset)
         }
-        .padding(.vertical, 28)
+        .padding(.vertical, tuning.margin.verticalInset)
     }
 
     /// 竖排标题：中日韩标题逐字向下排（最多 9 字），拉丁标题回退为横排换行。
@@ -400,13 +486,13 @@ struct ReceiptCardView: View {
             VStack(spacing: 0) {
                 ForEach(Array(data.title.prefix(9).enumerated()), id: \.offset) { _, character in
                     Text(String(character))
-                        .font(.system(size: 26, weight: .bold))
+                        .font(.system(size: tuning.size(26), weight: .bold))
                         .foregroundStyle(palette.ink.color)
                 }
             }
         } else {
             Text(data.title)
-                .font(.system(size: 26, weight: .bold))
+                .font(.system(size: tuning.size(26), weight: .bold))
                 .multilineTextAlignment(.trailing)
                 .lineLimit(3)
                 .minimumScaleFactor(0.7)
@@ -455,7 +541,7 @@ struct ReceiptCardView: View {
                 Rectangle().fill(palette.ink.color).frame(height: 4)
                 Rectangle().fill(palette.accent.color).frame(height: 2)
             }
-            .padding(.horizontal, 44)
+            .padding(.horizontal, tuning.margin.horizontalInset)
         case .horizon:
             horizonDecoration
         case .slate:
@@ -683,14 +769,14 @@ struct ReceiptCardView: View {
     private var titleBlock: some View {
         VStack(spacing: 8) {
             Text(data.title)
-                .font(.system(size: 26, weight: .bold))
+                .font(.system(size: tuning.size(26), weight: .bold))
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .minimumScaleFactor(0.65)
                 .foregroundStyle(palette.ink.color)
             if let original = data.originalTitle {
                 Text(original.uppercased())
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: tuning.size(11), weight: .medium))
                     .tracking(2.2)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
@@ -707,15 +793,15 @@ struct ReceiptCardView: View {
         HStack(spacing: 8) {
             if let rating = data.rating {
                 Text(rating)
-                    .font(.system(size: 14, weight: .heavy))
+                    .font(.system(size: tuning.size(14), weight: .heavy))
                     .foregroundStyle(palette.accentInk.color)
-                    .padding(.horizontal, 11)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, tuning.size(11))
+                    .padding(.vertical, tuning.size(4))
                     .background(palette.accent.color, in: Capsule())
             }
             if let votes = data.voteCount {
                 Text(votes)
-                    .font(.system(size: 11))
+                    .font(.system(size: tuning.size(11)))
                     .foregroundStyle(palette.ink.color.opacity(0.6))
             }
         }
@@ -733,18 +819,18 @@ struct ReceiptCardView: View {
             ForEach(data.fields) { field in
                 HStack(alignment: .firstTextBaseline, spacing: 16) {
                     Text(field.label.uppercased())
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: tuning.size(11), weight: .bold))
                         .tracking(2)
                         .foregroundStyle(palette.accent.color)
-                        .frame(width: 62, alignment: .leading)
+                        .frame(width: tuning.size(62), alignment: .leading)
                     Text(field.value)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: tuning.size(13), weight: .medium))
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                         .foregroundStyle(palette.ink.color)
                     Spacer(minLength: 0)
                 }
-                .padding(.vertical, 7)
+                .padding(.vertical, tuning.size(7))
                 .overlay(alignment: .bottom) {
                     Rectangle()
                         .fill(palette.ink.color.opacity(0.13))
@@ -767,18 +853,18 @@ struct ReceiptCardView: View {
             ForEach(data.fields) { field in
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text(field.label.uppercased())
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: tuning.size(10), weight: .bold))
                         .tracking(1.4)
                         .foregroundStyle(palette.accent.color)
-                        .frame(width: 48, alignment: .leading)
+                        .frame(width: tuning.size(48), alignment: .leading)
                     Text(field.value)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: tuning.size(12), weight: .medium))
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                         .foregroundStyle(palette.ink.color)
                     Spacer(minLength: 0)
                 }
-                .padding(.vertical, 5)
+                .padding(.vertical, tuning.size(5))
                 .overlay(alignment: .bottom) {
                     Rectangle()
                         .fill(palette.ink.color.opacity(0.13))
@@ -790,23 +876,26 @@ struct ReceiptCardView: View {
     }
 
     private var footer: some View {
-        VStack(spacing: 7) {
+        let tagline = tuning.tagline(fallback: data.tagline)
+        return VStack(spacing: tuning.size(7)) {
             Rectangle()
                 .fill(palette.ink.color.opacity(0.16))
                 .frame(height: 1)
-            if let tagline = data.tagline {
+            if let tagline {
                 Text(tagline)
-                    .font(.system(size: 12))
+                    .font(.system(size: tuning.size(12)))
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .foregroundStyle(palette.ink.color.opacity(0.75))
             }
-            Text(footerBrand)
-                .font(.system(size: 9, weight: .medium))
-                .tracking(1.6)
-                .foregroundStyle(palette.ink.color.opacity(0.4))
+            if tuning.showsWatermark {
+                Text(footerBrand)
+                    .font(.system(size: tuning.size(9), weight: .medium))
+                    .tracking(1.6)
+                    .foregroundStyle(palette.ink.color.opacity(0.4))
+            }
         }
-        .padding(.top, 8)
+        .padding(.top, tuning.size(8))
     }
 
     /// 页脚品牌行：电影保持 v1.2 文案；剧集 / 人物额外标注类型。
@@ -828,12 +917,13 @@ enum ReceiptRenderer {
         palette: ReceiptPalette,
         posterMode: ReceiptPosterMode,
         poster: CGImage?,
-        layout: ReceiptLayout = .classic
+        layout: ReceiptLayout = .classic,
+        tuning: ReceiptTuning = .standard
     ) -> CGImage? {
         let renderer = ImageRenderer(
             content: ReceiptCardView(
                 data: data, style: style, palette: palette, posterMode: posterMode,
-                poster: poster, layout: layout
+                poster: poster, layout: layout, tuning: tuning
             )
         )
         renderer.scale = ReceiptCanvas.exportScale
@@ -846,11 +936,12 @@ enum ReceiptRenderer {
         palette: ReceiptPalette,
         posterMode: ReceiptPosterMode,
         poster: CGImage?,
-        layout: ReceiptLayout = .classic
+        layout: ReceiptLayout = .classic,
+        tuning: ReceiptTuning = .standard
     ) -> Data? {
         guard let image = cgImage(
             data: data, style: style, palette: palette, posterMode: posterMode,
-            poster: poster, layout: layout
+            poster: poster, layout: layout, tuning: tuning
         ) else { return nil }
         return pngData(from: image)
     }
