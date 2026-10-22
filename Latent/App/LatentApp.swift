@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UserNotifications
 
 /// 显影（Latent）—— macOS TMDB 元数据浏览器。
 @main
@@ -14,6 +15,8 @@ struct LatentApp: App {
         // App Intents 与主应用共享同一容器，避免二次打开 SwiftData 存储。
         IntentContainerBox.shared.set(container)
         _environment = State(initialValue: AppEnvironment(container: container))
+        // 追更提醒（v1.25）：应用在前台时也让横幅正常弹出。
+        UNUserNotificationCenter.current().delegate = EpisodeNotificationPresenter.shared
     }
 
     var body: some Scene {

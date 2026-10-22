@@ -359,6 +359,21 @@ struct TVShowDetailView: View {
     @State private var seasonError: String?
     @State private var isLoadingSeason = false
     @State private var showsReceipt = false
+    /// 追更提醒（v1.25）：当前这一集是否已排入系统通知。
+    @State private var reminderScheduled = false
+    @State private var reminderBusy = false
+
+    private var reminderIdentifier: String? {
+        guard let next = show?.nextEpisodeToAir else { return nil }
+        return EpisodeReminder(
+            showID: showID,
+            showTitle: show?.title ?? "",
+            seasonNumber: next.seasonNumber ?? 0,
+            episodeNumber: next.episodeNumber,
+            episodeTitle: next.name,
+            airDate: next.airDate
+        )?.identifier
+    }
 
     var body: some View {
         MediaDetailScaffold(
@@ -376,6 +391,7 @@ struct TVShowDetailView: View {
             factsSection(detail)
         }
         .task(id: showID) { await load() }
+        .task(id: reminderIdentifier) { await refreshReminderState() }
         .sheet(isPresented: $showsReceipt) {
             if let show {
                 ReceiptSheet(data: ReceiptData.build(from: show))
@@ -391,6 +407,8 @@ struct TVShowDetailView: View {
 
     /// 追更（v1.18，设计文档第 8.6 节）：未完结的剧显示下一集与播出时间；
     /// 已完结 / 已取消的剧显示季集总数。两者都不满足时整段不出现。
+    ///
+    /// v1.25 起「下一集」行右侧多一个提醒按钮（播出日当晚 20:00），播出时间已过时不出现。
     @ViewBuilder
     private func airingSection(_ detail: TVShowDetail) -> some View {
         if let next = detail.nextEpisodeToAir {
@@ -398,19 +416,104 @@ struct TVShowDetailView: View {
                 icon: "calendar.badge.clock",
                 label: "下一集",
                 primary: episodeLabel(next),
-                trailing: Formatters.airDatePhrase(next.airDate) ?? "待定",
                 emphasized: true,
                 hint: Formatters.fullDate(next.airDate).map { "\($0) 播出" }
-            )
+            ) {
+                Text(Formatters.airDatePhrase(next.airDate) ?? "待定")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(UI.Palette.accent)
+
+                if let reminder = reminder(for: detail, episode: next) {
+                    reminderButton(reminder)
+                }
+            }
         } else if detail.hasEnded {
             airingRow(
                 icon: "checkmark.circle",
                 label: detail.statusLabel ?? "已完结",
                 primary: episodeTotals(detail),
-                trailing: nil,
                 emphasized: false,
                 hint: nil
             )
+        }
+    }
+
+    /// 提醒入口：未设置时「提醒我」，已设置时显示「已提醒」并可按取消。
+    ///
+    /// 系统通知权限被拒时点按会引导去系统设置（应用自身无法再弹授权框）。
+    private func reminderButton(_ reminder: EpisodeReminder) -> some View {
+        Button {
+            Task { await handleReminderTap(reminder) }
+        } label: {
+            Label(
+                reminderScheduled ? "已提醒" : "提醒我",
+                systemImage: reminderScheduled ? "bell.badge.fill" : "bell"
+            )
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(reminderScheduled ? UI.Palette.accent : UI.Palette.textSecondary)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(
+                (reminderScheduled ? UI.Palette.accent.opacity(0.14) : UI.Palette.surfaceElevated),
+                in: Capsule()
+            )
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(reminderBusy)
+        .help(reminderScheduled
+            ? "已设提醒：\(Formatters.fullDate(reminder.airDate) ?? reminder.airDate) 晚 \(EpisodeReminder.hourOfDay) 点。点按取消"
+            : "在 \(Formatters.fullDate(reminder.airDate) ?? reminder.airDate) 晚 \(EpisodeReminder.hourOfDay) 点提醒我")
+    }
+
+    private func reminder(for detail: TVShowDetail, episode: Episode) -> EpisodeReminder? {
+        EpisodeReminder(
+            showID: detail.id,
+            showTitle: detail.title,
+            seasonNumber: episode.seasonNumber ?? 0,
+            episodeNumber: episode.episodeNumber,
+            episodeTitle: episode.name,
+            airDate: episode.airDate
+        )
+    }
+
+    /// 换剧 / 换集时同步一次按钮状态（系统通知里已被清掉的话，这里会回到「提醒我」）。
+    private func refreshReminderState() async {
+        guard let reminderIdentifier else {
+            reminderScheduled = false
+            return
+        }
+        reminderScheduled = await appEnv.reminders.isScheduled(identifier: reminderIdentifier)
+    }
+
+    private func handleReminderTap(_ reminder: EpisodeReminder) async {
+        if reminderScheduled {
+            await appEnv.reminders.cancel(identifier: reminder.identifier)
+            reminderScheduled = false
+            ToastCenter.shared.show("已取消提醒")
+            return
+        }
+
+        reminderBusy = true
+        defer { reminderBusy = false }
+
+        var authorization = await appEnv.reminders.authorizationStatus()
+        if authorization == .notDetermined {
+            _ = await appEnv.reminders.requestAuthorization()
+            authorization = await appEnv.reminders.authorizationStatus()
+        }
+        guard authorization == .allowed else {
+            ToastCenter.shared.show("请先在「系统设置 → 通知」里允许「显影」发送通知")
+            return
+        }
+
+        do {
+            try await appEnv.reminders.schedule(reminder)
+            reminderScheduled = true
+            let when = Formatters.fullDate(reminder.airDate) ?? reminder.airDate
+            ToastCenter.shared.show("已设置提醒：\(when) 晚 \(EpisodeReminder.hourOfDay) 点")
+        } catch {
+            ToastCenter.shared.show("设置提醒失败：播出时间已过或被系统拒绝")
         }
     }
 
@@ -434,13 +537,13 @@ struct TVShowDetailView: View {
         return parts.joined(separator: " ")
     }
 
-    private func airingRow(
+    private func airingRow<Trailing: View>(
         icon: String,
         label: String,
         primary: String,
-        trailing: String?,
         emphasized: Bool,
-        hint: String?
+        hint: String?,
+        @ViewBuilder trailing: () -> Trailing = { EmptyView() }
     ) -> some View {
         HStack(spacing: UI.Spacing.s2) {
             Image(systemName: icon)
@@ -461,11 +564,7 @@ struct TVShowDetailView: View {
 
             Spacer(minLength: UI.Spacing.s2)
 
-            if let trailing {
-                Text(trailing)
-                    .font(.system(size: 12, weight: emphasized ? .medium : .regular))
-                    .foregroundStyle(emphasized ? UI.Palette.accent : UI.Palette.textSecondary)
-            }
+            trailing()
         }
         .padding(.horizontal, UI.Spacing.s3)
         .padding(.vertical, UI.Spacing.s2)
