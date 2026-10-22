@@ -528,6 +528,40 @@ enum ReceiptPosterProcessor {
         return ReceiptPosterColors(dominant: dominant, secondary: secondary?.color ?? shifted(dominant))
     }
 
+    /// 海报色彩指纹（v1.31）：把封面横向压成 `count` 段平均色，作为每部片独有的「色彩 DNA」。
+    ///
+    /// 与主色 / 辅色不同，这里保留整幅封面的横向色彩走势：8 段足以辨认，又不会退化成马赛克。
+    /// 缺图或绘制失败返回空数组（调用方不画色条）。
+    static func fingerprint(of image: CGImage?, count: Int = 8) -> [ReceiptColor] {
+        guard let image, count > 0 else { return [] }
+        var pixels = [UInt8](repeating: 0, count: count * 4)
+
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let base = buffer.baseAddress, let cgContext = CGContext(
+                data: base,
+                width: count,
+                height: 1,
+                bitsPerComponent: 8,
+                bytesPerRow: count * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            cgContext.interpolationQuality = .medium
+            cgContext.draw(image, in: CGRect(x: 0, y: 0, width: count, height: 1))
+            return true
+        }
+        guard drawn else { return [] }
+
+        return (0..<count).map { index in
+            let offset = index * 4
+            return ReceiptColor(
+                red: Double(pixels[offset]) / 255,
+                green: Double(pixels[offset + 1]) / 255,
+                blue: Double(pixels[offset + 2]) / 255
+            )
+        }
+    }
+
     /// 降采样样本（16×24）：一次缩放绘制拿到整幅的粗略色彩分布。
     private static func samples(of image: CGImage) -> [ReceiptColor] {
         let columns = 16

@@ -394,6 +394,53 @@ struct ReceiptTests {
         #expect(grayscale.hsb.saturation < 0.1)
     }
 
+    // MARK: - 色彩指纹（v1.31）
+
+    @Test("色彩指纹：横向 8 段，左右两半分别贴近黑与白；无图返回空")
+    func fingerprintFollowsHalves() throws {
+        let image = try #require(halfToneImage())
+        let stripes = ReceiptPosterProcessor.fingerprint(of: image)
+
+        #expect(stripes.count == 8)
+        #expect(stripes[0].hsb.brightness < 0.25)
+        #expect(stripes[7].hsb.brightness > 0.75)
+        #expect(ReceiptPosterProcessor.fingerprint(of: nil).isEmpty)
+    }
+
+    @Test("色彩指纹：中间主体段比底色段更鲜艳")
+    func fingerprintPicksUpSubject() throws {
+        let image = try #require(Self.cover(
+            background: ReceiptColor(hue: 0.66, saturation: 0.35, brightness: 0.10),
+            subject: ReceiptColor(hue: 0.07, saturation: 0.95, brightness: 0.95)
+        ))
+        let stripes = ReceiptPosterProcessor.fingerprint(of: image)
+
+        #expect(stripes.count == 8)
+        // 主体方块占横向 28%–72%，落在第 3、4 段；两端是暗底。
+        #expect(stripes[3].hsb.saturation > stripes[0].hsb.saturation + 0.3)
+    }
+
+    @Test("带封面的分享卡仍导出 1080×1440（底部色条不撑破画布）")
+    func rendersWithFingerprintStrip() throws {
+        let image = try #require(Self.cover(
+            background: ReceiptColor(hue: 0.66, saturation: 0.35, brightness: 0.10),
+            subject: ReceiptColor(hue: 0.07, saturation: 0.95, brightness: 0.95)
+        ))
+        let data = ReceiptData.build(from: MovieDetail(
+            id: 1, title: "测试影片", dateString: "2024-01-01",
+            voteAverage: 7.5, voteCount: 10, runtime: 100
+        ))
+
+        for layout in ReceiptLayout.allCases {
+            let rendered = ReceiptRenderer.cgImage(
+                data: data, style: .thermal, palette: ReceiptStyle.thermal.basePalette,
+                posterMode: .original, poster: image, layout: layout
+            )
+            #expect(rendered?.width == 1080, "\(layout.displayName) 宽度异常")
+            #expect(rendered?.height == 1440, "\(layout.displayName) 高度异常")
+        }
+    }
+
     /// 左半黑、右半白的测试图。
     private func halfToneImage() -> CGImage? {
         let width = 100, height = 80

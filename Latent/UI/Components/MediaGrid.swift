@@ -96,6 +96,8 @@ struct MediaListRow: View {
     var isSelected: Bool = false
     let onOpen: () -> Void
     @State private var isHovering = false
+    /// 海报色彩指纹（v1.31）：8 段封面平均色，作为列表里的视觉标识。
+    @State private var fingerprint: [ReceiptColor] = []
 
     var body: some View {
         HStack(spacing: UI.Spacing.s3) {
@@ -133,6 +135,10 @@ struct MediaListRow: View {
                 }
             }
             Spacer(minLength: 0)
+
+            if !fingerprint.isEmpty {
+                fingerprintBar
+            }
         }
         .padding(.horizontal, UI.Spacing.s2)
         .padding(.vertical, 6)
@@ -148,6 +154,9 @@ struct MediaListRow: View {
         .onHover { hovering in
             withAnimation(UI.Motion.hover) { isHovering = hovering }
         }
+        .task(id: summary.posterPath) {
+            fingerprint = await Self.fingerprint(of: summary.posterPath)
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(isSelecting ? "点按以选择或取消选择" : "点按打开详情")
@@ -158,6 +167,25 @@ struct MediaListRow: View {
     private var rowBackground: Color {
         if isSelecting && isSelected { return UI.Palette.accent.opacity(0.10) }
         return isHovering ? UI.Palette.surfaceElevated : .clear
+    }
+
+    /// 色条：8 段封面平均色，胶囊收边；宽度压到 52pt，不抢标题。
+    private var fingerprintBar: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(fingerprint.enumerated()), id: \.offset) { _, color in
+                Rectangle().fill(color.color)
+            }
+        }
+        .frame(width: 52, height: 8)
+        .clipShape(Capsule())
+        .accessibilityHidden(true)
+    }
+
+    /// 用小海报（与 `PosterImage` 同一像素桶，命中同一份内存缓存）算指纹。
+    private static func fingerprint(of path: String?) async -> [ReceiptColor] {
+        guard let path, !path.isEmpty else { return [] }
+        guard let image = try? await ImagePipeline.shared.image(for: path, displayWidth: 40) else { return [] }
+        return ReceiptPosterProcessor.fingerprint(of: image)
     }
 
     private var accessibilityTraits: AccessibilityTraits {

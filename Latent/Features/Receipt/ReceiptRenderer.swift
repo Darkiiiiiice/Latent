@@ -163,7 +163,26 @@ struct ReceiptCardView: View {
             content
         }
         .frame(width: ReceiptCanvas.size.width, height: ReceiptCanvas.size.height)
+        .overlay(alignment: .bottom) { fingerprintStrip }
         .clipShape(Rectangle())
+    }
+
+    /// 海报色彩指纹（v1.31）：封面横向 8 段平均色，贴画布底边当装饰条。
+    ///
+    /// 取的是原始封面（不经双色调 / 灰度），因此色条保留封面本色；
+    /// 无海报（或大字版式）时不画。6pt 高，落在各版式 20pt 上下的内缩留白之内，不压文字。
+    @ViewBuilder
+    private var fingerprintStrip: some View {
+        let colors = ReceiptPosterProcessor.fingerprint(of: poster)
+        if !colors.isEmpty {
+            HStack(spacing: 0) {
+                ForEach(Array(colors.enumerated()), id: \.offset) { _, color in
+                    Rectangle().fill(color.color)
+                }
+            }
+            .frame(height: 6)
+            .accessibilityHidden(true)
+        }
     }
 
     // MARK: - 内容
