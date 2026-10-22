@@ -76,6 +76,10 @@ struct ReceiptCardView: View {
                 Rectangle().fill(palette.accent.color).frame(height: 2)
             }
             .padding(.horizontal, 44)
+        case .horizon:
+            horizonDecoration
+        case .slate:
+            slateDecoration
         default:
             EmptyView()
         }
@@ -86,11 +90,61 @@ struct ReceiptCardView: View {
         switch style.decoration {
         case .stub: stubDecoration
         case .sprockets: sprocketDecoration
+        case .neonFrame: neonFrame
         default: EmptyView()
         }
     }
 
     // MARK: 装饰
+
+    /// 落日放映（v1.26）：顶部光谱带（亮部 → 强调 → 暗部）+ 一条细墨线收边。
+    private var horizonDecoration: some View {
+        VStack(spacing: 0) {
+            LinearGradient(
+                colors: [
+                    palette.duoLight.color,
+                    palette.accent.color,
+                    palette.duoDark.color,
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(height: 7)
+            Rectangle()
+                .fill(palette.ink.color.opacity(0.22))
+                .frame(height: 1)
+        }
+    }
+
+    /// 场记板（v1.26）：顶部黑白相间的打板条。
+    private var slateDecoration: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                ForEach(0..<18, id: \.self) { index in
+                    Rectangle()
+                        .fill(index.isMultiple(of: 2)
+                              ? palette.accent.color
+                              : palette.ink.color.opacity(0.92))
+                }
+            }
+            .frame(height: 22)
+            Rectangle()
+                .fill(palette.ink.color.opacity(0.3))
+                .frame(height: 1)
+        }
+    }
+
+    /// 午夜场（v1.26）：双线霓虹外框，内线弱一档，避免抢海报。
+    private var neonFrame: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(palette.accent.color, lineWidth: 2)
+                .padding(14)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(palette.accent.color.opacity(0.32), lineWidth: 1)
+                .padding(21)
+        }
+    }
 
     /// 电影票根：上下齿孔 + 撕线 + 右侧竖排副券。
     private var stubDecoration: some View {

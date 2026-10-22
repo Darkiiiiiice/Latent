@@ -184,11 +184,30 @@ struct ReceiptTests {
 
     // MARK: - 调色板
 
-    @Test("七款固有调色板齐全：强调色互不相同")
+    @Test("十八款固有调色板齐全：强调色互不相同，编辑器主题齐全")
     func palettesAreDistinct() {
         let styles = ReceiptStyle.allCases
-        #expect(styles.count == 7)
+        #expect(styles.count == 18)
         #expect(Set(styles.map(\.basePalette.accent)).count == styles.count)
+        #expect(ReceiptStyle.cinematic.count == 10)
+        #expect(ReceiptStyle.editorThemes.count == 8)
+        #expect(ReceiptStyle.editorThemes.allSatisfy { $0.decoration == .none })
+        #expect(styles.allSatisfy { !$0.displayName.isEmpty })
+    }
+
+    @Test("十八款的纸底与墨色都保持可读对比（墨色对纸底 ≥ 7）")
+    func basePalettesKeepInkReadable() {
+        for style in ReceiptStyle.allCases {
+            let base = style.basePalette
+            #expect(
+                base.ink.contrast(with: base.paper) >= 7.0,
+                "\(style.displayName) 墨色对纸底对比不足"
+            )
+            #expect(
+                base.duoDark.contrast(with: base.duoLight) >= 2.0,
+                "\(style.displayName) 双色调两端过于接近"
+            )
+        }
     }
 
     @Test("强调色上的文字对比度全部达标（≥ 4.5）")
@@ -412,7 +431,7 @@ struct ReceiptTests {
 
     // MARK: - 渲染导出
 
-    @Test("七款风格都能导出 1080×1440 图像")
+    @Test("十款风格都能导出 1080×1440 图像")
     func rendersExportSize() {
         let data = ReceiptData.build(from: MovieDetail(
             id: 1, title: "测试影片", dateString: "2024-01-01",

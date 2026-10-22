@@ -110,21 +110,26 @@ struct ReceiptSheet: View {
 
     private var styleList: some View {
         VStack(alignment: .leading, spacing: UI.Spacing.s3) {
-            Text("风格")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(UI.Palette.textSecondary)
-
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: UI.Spacing.s3),
-                    GridItem(.flexible(), spacing: UI.Spacing.s3),
-                ],
-                spacing: UI.Spacing.s3
-            ) {
-                ForEach(ReceiptStyle.allCases) { item in
-                    styleButton(item)
-                }
+            HStack {
+                Text("风格")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(UI.Palette.textSecondary)
+                Spacer(minLength: 0)
+                Text("\(ReceiptStyle.allCases.count) 款")
+                    .font(.system(size: 11))
+                    .monospacedDigit()
+                    .foregroundStyle(UI.Palette.textSecondary)
             }
+
+            // 十八款分两组；高度固定，避免风格变多后把面板撑长。
+            ScrollView {
+                VStack(alignment: .leading, spacing: UI.Spacing.s3) {
+                    styleGroup("电影感", styles: ReceiptStyle.cinematic)
+                    styleGroup("编辑器主题", styles: ReceiptStyle.editorThemes)
+                }
+                .padding(.trailing, 2)
+            }
+            .frame(height: 300)
 
             Text("封面")
                 .font(.system(size: 12, weight: .medium))
@@ -149,6 +154,26 @@ struct ReceiptSheet: View {
             Spacer(minLength: 0)
         }
         .frame(width: 340, alignment: .leading)
+    }
+
+    private func styleGroup(_ title: String, styles: [ReceiptStyle]) -> some View {
+        VStack(alignment: .leading, spacing: UI.Spacing.s2) {
+            Text(title)
+                .font(.system(size: 11))
+                .foregroundStyle(UI.Palette.textSecondary.opacity(0.75))
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: UI.Spacing.s3),
+                    GridItem(.flexible(), spacing: UI.Spacing.s3),
+                ],
+                spacing: UI.Spacing.s2
+            ) {
+                ForEach(styles) { item in
+                    styleButton(item)
+                }
+            }
+        }
     }
 
     private func styleButton(_ item: ReceiptStyle) -> some View {

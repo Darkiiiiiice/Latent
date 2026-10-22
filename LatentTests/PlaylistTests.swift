@@ -126,7 +126,7 @@ struct PlaylistTests {
         #expect(fullImage.height == 1440)
     }
 
-    @Test("七款风格都能渲染片单卡")
+    @Test("十款风格都能渲染片单卡")
     func rendersAllStyles() {
         let data = PlaylistCardData.build(
             title: "我的收藏", kind: .favorites, items: Self.snapshots(9)
