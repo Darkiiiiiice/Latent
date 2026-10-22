@@ -24,6 +24,8 @@ struct ReceiptSheet: View {
     @State private var posterColors: ReceiptPosterColors?
     @State private var exportDocument: ReceiptImageDocument?
     @State private var isExporting = false
+    @State private var gifDocument: ReceiptGIFDocument?
+    @State private var isExportingGIF = false
     /// 系统分享用的位图（`ShareLink` 需要一个现成的 `Transferable`）。
     @State private var shareImage: Image?
 
@@ -75,6 +77,20 @@ struct ReceiptSheet: View {
             switch result {
             case .success:
                 ToastCenter.shared.show("已保存分享卡")
+            case .failure(let error):
+                ToastCenter.shared.show("保存失败：\(error.localizedDescription)")
+            }
+        }
+        .fileExporter(
+            isPresented: $isExportingGIF,
+            document: gifDocument,
+            contentType: .gif,
+            defaultFilename: ReceiptDeveloper.filename(title: data.title)
+        ) { result in
+            gifDocument = nil
+            switch result {
+            case .success:
+                ToastCenter.shared.show("已保存显影 GIF")
             case .failure(let error):
                 ToastCenter.shared.show("保存失败：\(error.localizedDescription)")
             }
@@ -365,6 +381,8 @@ struct ReceiptSheet: View {
                     .disabled(true)
             }
             Button("保存 PNG…") { save() }
+            Button("显影 GIF…") { saveGIF() }
+                .help("导出 2 秒「显影过程」动画 GIF（540 宽，循环播放）")
             Spacer(minLength: 0)
             Button("完成") { dismiss() }
         }
@@ -408,6 +426,19 @@ struct ReceiptSheet: View {
         }
         exportDocument = ReceiptImageDocument(data: png)
         isExporting = true
+    }
+
+    /// 生成显影动画 GIF 并打开保存面板。
+    private func saveGIF() {
+        guard let gif = ReceiptDeveloper.gifData(
+            data: data, style: style, palette: palette, posterMode: posterMode,
+            poster: poster, layout: layout, aspect: aspect, tuning: tuning
+        ) else {
+            ToastCenter.shared.show("显影 GIF 生成失败")
+            return
+        }
+        gifDocument = ReceiptGIFDocument(data: gif)
+        isExportingGIF = true
     }
 
     private func loadPoster() async {

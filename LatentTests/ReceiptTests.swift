@@ -705,6 +705,100 @@ struct ReceiptTests {
         return CGFloat(rows) / scale
     }
 
+    @Test("显影 GIF：合法 GIF89a、帧数与延迟正确、无限循环、首帧纯纸底")
+    func developsGIF() throws {
+        let data = ReceiptData.build(from: MovieDetail(
+            id: 6, title: "显影测试", dateString: "2024-05-01",
+            voteAverage: 7.5, voteCount: 800, runtime: 100
+        ))
+        let gif = try #require(ReceiptDeveloper.gifData(
+            data: data, style: .thermal, palette: ReceiptStyle.thermal.basePalette,
+            posterMode: .duotone, poster: nil
+        ))
+
+        // GIF 文件魔数（ImageIO 可能写 GIF87a 或 GIF89a，均合法）。
+        let magic = String(data: gif.prefix(6), encoding: .ascii)
+        #expect(magic == "GIF89a" || magic == "GIF87a", "magic = \(magic ?? "nil")")
+
+        let source = try #require(CGImageSourceCreateWithData(gif as CFData, nil))
+        let spec = ReceiptDeveloper.Spec()
+        #expect(CGImageSourceGetCount(source) == spec.frameCount)
+
+        // 无限循环。
+        let fileProps = try #require(CGImageSourceCopyProperties(source, nil) as? [CFString: Any])
+        let fileGIF = try #require(fileProps[kCGImagePropertyGIFDictionary] as? [CFString: Any])
+        #expect((fileGIF[kCGImagePropertyGIFLoopCount] as? Int) == 0)
+
+        // 帧延迟：普通帧 1/15 秒，末帧停留 1 秒。
+        let firstProps = try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+        let firstGIF = try #require(firstProps[kCGImagePropertyGIFDictionary] as? [CFString: Any])
+        #expect(abs((firstGIF[kCGImagePropertyGIFDelayTime] as? Double ?? 0) - spec.frameDelay) < 0.01)
+
+        let lastIndex = spec.frameCount - 1
+        let lastProps = try #require(CGImageSourceCopyPropertiesAtIndex(source, lastIndex, nil) as? [CFString: Any])
+        let lastGIF = try #require(lastProps[kCGImagePropertyGIFDictionary] as? [CFString: Any])
+        #expect((lastGIF[kCGImagePropertyGIFDelayTime] as? Double ?? 0) >= 0.9)
+
+        // 输出 540 宽（3:4 → 720 高）。
+        let firstFrame = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        #expect(firstFrame.width == 540)
+        #expect(firstFrame.height == 720)
+
+        // 首帧中心像素 ≈ 纸底色（wipe 尚未开始）。
+        let centerColor = pixelColor(at: CGPoint(x: 270, y: 360), in: firstFrame)
+        let paperColor = NSColor(ReceiptStyle.thermal.basePalette.paper.color)
+            .usingColorSpace(.deviceRGB) ?? .white
+        #expect(abs(centerColor.r - paperColor.redComponent * 255) < 14)
+        #expect(abs(centerColor.g - paperColor.greenComponent * 255) < 14)
+        #expect(abs(centerColor.b - paperColor.blueComponent * 255) < 14)
+    }
+
+    /// 读取位图某点的 RGB（0–255）。
+    private func pixelColor(at point: CGPoint, in image: CGImage) -> (r: Double, g: Double, b: Double) {
+        let width = image.width
+        let height = image.height
+        guard let context = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return (0, 0, 0) }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let data = context.data else { return (0, 0, 0) }
+        let buffer = data.bindMemory(to: UInt8.self, capacity: width * height * 4)
+        // 注意 CG 坐标系：入参的 y 以「从顶部算」为准。
+        let x = min(width - 1, max(0, Int(point.x)))
+        let y = min(height - 1, max(0, height - 1 - Int(point.y)))
+        let offset = (y * width + x) * 4
+        return (Double(buffer[offset]), Double(buffer[offset + 1]), Double(buffer[offset + 2]))
+    }
+
+    @Test("显影 GIF：三款比例都按 540 宽输出对应高度")
+    func developsGIFAllAspects() throws {
+        let data = ReceiptData.build(from: MovieDetail(
+            id: 7, title: "比例显影", dateString: "2024-06-01",
+            voteAverage: 7.0, voteCount: 500, runtime: 96
+        ))
+        let expected: [ReceiptAspect: Int] = [
+            .portrait: 720, .square: 540, .story: 960,
+        ]
+        for aspect in ReceiptAspect.allCases {
+            let gif = try #require(ReceiptDeveloper.gifData(
+                data: data, style: .midnight, palette: ReceiptStyle.midnight.basePalette,
+                posterMode: .duotone, poster: nil, layout: .classic, aspect: aspect
+            ), "\(aspect.displayName) 显影 GIF 生成失败")
+            let source = try #require(CGImageSourceCreateWithData(gif as CFData, nil))
+            let frame = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+            #expect(frame.width == 540, "\(aspect.displayName) 宽度异常")
+            #expect(frame.height == expected[aspect], "\(aspect.displayName) 高度异常")
+        }
+    }
+
+    @Test("显影 GIF 文件名：清洗非法字符")
+    func gifFilename() {
+        #expect(ReceiptDeveloper.filename(title: "沙丘/第二部") == "显影-沙丘-第二部-显影.gif")
+        #expect(ReceiptDeveloper.filename(title: "  ") == "显影-显影.gif")
+    }
+
     @Test("文件名清洗：去掉路径非法字符")
     func sanitizesFilename() {
         #expect(ReceiptRenderer.filename(title: "沙丘/第二部") == "显影-沙丘-第二部-分享卡.png")
