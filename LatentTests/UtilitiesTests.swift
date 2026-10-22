@@ -458,3 +458,31 @@ struct TMDBLinksTests {
         #expect(TMDBLinks.imdbURL(imdbID: "") == nil)
     }
 }
+
+/// 图片画廊缩放（v1.24）：比例夹取与拖动边界。
+@Suite("画廊缩放")
+struct GalleryZoomTests {
+
+    @Test("比例限制在 1×–4×")
+    func clampScale() {
+        #expect(GalleryZoom.clampedScale(0.2) == 1)
+        #expect(GalleryZoom.clampedScale(2.5) == 2.5)
+        #expect(GalleryZoom.clampedScale(9) == 4)
+    }
+
+    @Test("未放大时不允许拖动")
+    func offsetAtOriginalScale() {
+        let stage = CGSize(width: 800, height: 600)
+        #expect(GalleryZoom.clampedOffset(CGSize(width: 120, height: -90), scale: 1, stage: stage) == .zero)
+    }
+
+    @Test("放大后拖动限制在可视范围内")
+    func offsetBounds() {
+        let stage = CGSize(width: 800, height: 600)
+        // 2× 时单边最多 400 × 300。
+        #expect(GalleryZoom.clampedOffset(CGSize(width: 120, height: -90), scale: 2, stage: stage)
+            == CGSize(width: 120, height: -90))
+        #expect(GalleryZoom.clampedOffset(CGSize(width: 9_999, height: -9_999), scale: 2, stage: stage)
+            == CGSize(width: 400, height: -300))
+    }
+}

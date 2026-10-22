@@ -19,7 +19,32 @@ struct GalleryRequest: Identifiable {
     let initialIndex: Int
 }
 
+/// 缩放参数（纯函数，便于单测；v1.24）。
+enum GalleryZoom {
+    static let minScale: CGFloat = 1
+    static let maxScale: CGFloat = 4
+    static let step: CGFloat = 0.5
+    /// 双击放大的档位。
+    static let doubleTapScale: CGFloat = 2
+
+    static func clampedScale(_ value: CGFloat) -> CGFloat {
+        min(max(value, minScale), maxScale)
+    }
+
+    /// 缩放后允许的平移上限：舞台尺寸 ×（缩放 − 1）/ 2，保证图片不会被拖出视野。
+    static func clampedOffset(_ proposed: CGSize, scale: CGFloat, stage: CGSize) -> CGSize {
+        guard scale > minScale else { return .zero }
+        let maxX = max(0, stage.width * (scale - 1) / 2)
+        let maxY = max(0, stage.height * (scale - 1) / 2)
+        return CGSize(
+            width: min(max(proposed.width, -maxX), maxX),
+            height: min(max(proposed.height, -maxY), maxY)
+        )
+    }
+}
+
 /// 图片画廊（v1.22）：大图 + 缩略图条，左右方向键翻页，可按剧照 / 海报切换。
+/// v1.24 支持缩放：捏合、双击、右上角 +/− 或缩放百分比旁按钮；放大后可拖动查看细节。
 struct ImageGallerySheet: View {
     let request: GalleryRequest
 
@@ -27,6 +52,10 @@ struct ImageGallerySheet: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var kind: GalleryKind
     @State private var index: Int
+    @State private var scale: CGFloat = GalleryZoom.minScale
+    @State private var baseScale: CGFloat = GalleryZoom.minScale
+    @State private var offset: CGSize = .zero
+    @State private var baseOffset: CGSize = .zero
 
     init(request: GalleryRequest) {
         self.request = request
@@ -57,6 +86,8 @@ struct ImageGallerySheet: View {
         }
         .frame(width: 980, height: 720)
         .background(UI.Palette.bg)
+        .onChange(of: index) { _, _ in resetZoom(animated: false) }
+        .onChange(of: kind) { _, _ in resetZoom(animated: false) }
     }
 
     private var header: some View {
@@ -107,29 +138,151 @@ struct ImageGallerySheet: View {
     }
 
     private var stage: some View {
-        ZStack {
-            UI.Palette.surface.opacity(0.4)
+        GeometryReader { proxy in
+            ZStack {
+                UI.Palette.surface.opacity(0.4)
 
-            if let current {
-                PosterImage(path: current.filePath, displayWidth: 640, cornerRadius: 4, contentMode: .fit)
-                    .id(current.id)
-                    .padding(UI.Spacing.s4)
-                    .transition(.opacity)
+                if let current {
+                    PosterImage(path: current.filePath, displayWidth: 640, cornerRadius: 4, contentMode: .fit)
+                        .id(current.id)
+                        .padding(UI.Spacing.s4)
+                        .scaleEffect(scale)
+                        .offset(offset)
+                        .contentShape(Rectangle())
+                        .gesture(magnifyGesture)
+                        .simultaneousGesture(panGesture(in: proxy.size))
+                        .onTapGesture(count: 2) { toggleZoom() }
+                        .help(scale > GalleryZoom.minScale ? "拖动查看细节 · 双击还原" : "双击放大")
+                        .transition(.opacity)
+                }
+
+                navButton(systemImage: "chevron.left", isEnabled: index > 0) { go(-1) }
+                    .padding(.leading, UI.Spacing.s3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                navButton(systemImage: "chevron.right", isEnabled: index < assets.count - 1) { go(1) }
+                    .padding(.trailing, UI.Spacing.s3)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+
+                zoomControls
             }
-
-            navButton(systemImage: "chevron.left", isEnabled: index > 0) { go(-1) }
-                .padding(.leading, UI.Spacing.s3)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            navButton(systemImage: "chevron.right", isEnabled: index < assets.count - 1) { go(1) }
-                .padding(.trailing, UI.Spacing.s3)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipped()
+            .contentShape(Rectangle())
+            .focusable()
+            .onKeyPress(.leftArrow) { go(-1); return .handled }
+            .onKeyPress(.rightArrow) { go(1); return .handled }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .contentShape(Rectangle())
-        .focusable()
-        .onKeyPress(.leftArrow) { go(-1); return .handled }
-        .onKeyPress(.rightArrow) { go(1); return .handled }
+    }
+
+    // MARK: - 缩放（v1.24）
+
+    private var zoomControls: some View {
+        HStack(spacing: 2) {
+            zoomButton(systemImage: "minus", isEnabled: scale > GalleryZoom.minScale + 0.001) {
+                setScale(scale - GalleryZoom.step)
+            }
+
+            Text(String(format: "%.1f×", scale))
+                .font(.system(size: 10, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(UI.Palette.textSecondary)
+                .frame(width: 34)
+
+            zoomButton(systemImage: "plus", isEnabled: scale < GalleryZoom.maxScale - 0.001) {
+                setScale(scale + GalleryZoom.step)
+            }
+        }
+        .padding(.horizontal, 5)
+        .padding(.vertical, 3)
+        .background(UI.Palette.surface, in: Capsule())
+        .hairlineBorder(UI.Palette.border, radius: 14)
+        .opacity(scale > GalleryZoom.minScale + 0.001 ? 1 : 0.75)
+        .padding(UI.Spacing.s3)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+    }
+
+    private func zoomButton(systemImage: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(isEnabled ? UI.Palette.textPrimary : UI.Palette.textSecondary.opacity(0.35))
+                .frame(width: 20, height: 20)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .help(systemImage == "plus" ? "放大" : "缩小")
+    }
+
+    private var magnifyGesture: some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                scale = GalleryZoom.clampedScale(baseScale * value.magnification)
+            }
+            .onEnded { _ in
+                baseScale = scale
+                if scale <= GalleryZoom.minScale + 0.001 {
+                    resetZoom(animated: true)
+                }
+            }
+    }
+
+    private func panGesture(in size: CGSize) -> some Gesture {
+        DragGesture()
+            .onChanged { value in
+                guard scale > GalleryZoom.minScale + 0.001 else { return }
+                let proposed = CGSize(
+                    width: baseOffset.width + value.translation.width,
+                    height: baseOffset.height + value.translation.height
+                )
+                offset = GalleryZoom.clampedOffset(proposed, scale: scale, stage: size)
+            }
+            .onEnded { _ in
+                baseOffset = offset
+            }
+    }
+
+    private func toggleZoom() {
+        if scale > GalleryZoom.minScale + 0.001 {
+            resetZoom(animated: true)
+        } else {
+            setScale(GalleryZoom.doubleTapScale)
+        }
+    }
+
+    private func setScale(_ value: CGFloat) {
+        let target = GalleryZoom.clampedScale(value)
+        baseScale = target
+        guard !reduceMotion else {
+            scale = target
+            if target <= GalleryZoom.minScale { offset = .zero; baseOffset = .zero }
+            return
+        }
+        withAnimation(UI.Motion.hover) {
+            scale = target
+            if target <= GalleryZoom.minScale {
+                offset = .zero
+            }
+        }
+        if target <= GalleryZoom.minScale {
+            baseOffset = .zero
+        }
+    }
+
+    private func resetZoom(animated: Bool) {
+        baseScale = GalleryZoom.minScale
+        baseOffset = .zero
+        guard animated && !reduceMotion else {
+            scale = GalleryZoom.minScale
+            offset = .zero
+            return
+        }
+        withAnimation(UI.Motion.hover) {
+            scale = GalleryZoom.minScale
+            offset = .zero
+        }
     }
 
     private func navButton(systemImage: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
