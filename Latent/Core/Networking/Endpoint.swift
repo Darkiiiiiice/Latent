@@ -26,6 +26,10 @@ enum Endpoint: Sendable, Hashable {
     case reviews(mediaKind: MediaKind, id: Int, page: Int)
     /// GET /3/discover/{movie,tv}
     case discover(mediaKind: MediaKind, query: DiscoverQuery, page: Int)
+    /// GET /3/movie/upcoming（v1.34 上映日历）
+    case movieUpcoming(page: Int)
+    /// GET /3/tv/on_the_air（v1.34 上映日历）
+    case tvOnTheAir(page: Int)
     /// GET /3/genre/{movie,tv}/list
     case genreList(mediaKind: MediaKind)
     /// GET /3/watch/providers/{movie,tv}?watch_region=…
@@ -69,6 +73,10 @@ enum Endpoint: Sendable, Hashable {
             return "/3/\(mediaKind == .tv ? "tv" : "movie")/\(id)/reviews"
         case .discover(let mediaKind, _, _):
             return "/3/discover/\(mediaKind == .tv ? "tv" : "movie")"
+        case .movieUpcoming:
+            return "/3/movie/upcoming"
+        case .tvOnTheAir:
+            return "/3/tv/on_the_air"
         case .genreList(let mediaKind):
             return "/3/genre/\(mediaKind == .tv ? "tv" : "movie")/list"
         case .watchProviders(let mediaKind, _):
@@ -82,6 +90,9 @@ enum Endpoint: Sendable, Hashable {
         case .configuration, .genreList, .watchProviders:
             return CacheTTL.settings
         case .trending:
+            return CacheTTL.trending
+        case .movieUpcoming, .tvOnTheAir:
+            // 上映日期会变动，但不必秒级新鲜；与趋势同样按 1 小时缓存。
             return CacheTTL.trending
         case .searchMulti:
             return CacheTTL.search
@@ -175,6 +186,11 @@ enum Endpoint: Sendable, Hashable {
             return items
         case .genreList:
             return [URLQueryItem(name: "language", value: language)]
+        case .movieUpcoming(let page), .tvOnTheAir(let page):
+            return [
+                URLQueryItem(name: "language", value: language),
+                URLQueryItem(name: "page", value: String(page)),
+            ]
         case .watchProviders(_, let region):
             return [
                 URLQueryItem(name: "language", value: language),

@@ -104,6 +104,14 @@ actor TMDBClient: TMDBClientProtocol {
         try await fetch(.trending(mediaKind: mediaKind, window: window))
     }
 
+    func movieUpcoming(page: Int) async throws -> Paged<MediaSummary> {
+        try await fetch(.movieUpcoming(page: page))
+    }
+
+    func tvOnTheAir(page: Int) async throws -> Paged<MediaSummary> {
+        try await fetch(.tvOnTheAir(page: page))
+    }
+
     func searchMulti(query: String, page: Int) async throws -> Paged<SearchResult> {
         try await fetch(.searchMulti(query: query, page: page))
     }

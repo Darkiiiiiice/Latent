@@ -13,6 +13,10 @@ protocol TMDBClientProtocol: Sendable {
     func company(id: Int) async throws -> CompanyDetail
     func reviews(mediaKind: MediaKind, id: Int, page: Int) async throws -> Paged<Review>
     func discover(mediaKind: MediaKind, query: DiscoverQuery, page: Int) async throws -> Paged<MediaSummary>
+    /// 即将上映的电影（v1.34 上映日历）。
+    func movieUpcoming(page: Int) async throws -> Paged<MediaSummary>
+    /// 正在播出的剧集（v1.34 上映日历；本周及近期有播出）。
+    func tvOnTheAir(page: Int) async throws -> Paged<MediaSummary>
     func genreList(mediaKind: MediaKind) async throws -> [Genre]
     func watchProviders(mediaKind: MediaKind, region: String) async throws -> [WatchProvider]
 }
@@ -45,6 +49,8 @@ struct MockTMDBClient: TMDBClientProtocol {
     var company: CompanyDetail = .sample
     var reviewsPage = Paged(page: 1, items: Review.samples, totalPages: 1, totalResults: Review.samples.count)
     var discoverPage = Paged(page: 1, items: MediaSummary.samples(count: 18, kind: .movie), totalPages: 2, totalResults: 36)
+    var upcomingPage = Paged(page: 1, items: MediaSummary.samples(count: 6, kind: .movie), totalPages: 5, totalResults: 30)
+    var onTheAirPage = Paged(page: 1, items: MediaSummary.samples(count: 6, kind: .tv), totalPages: 5, totalResults: 30)
     var genres: [Genre] = Genre.samples
     var providers: [WatchProvider] = WatchProvider.samples
     /// 置为非空时，`searchMulti` 抛出该错误（单测「搜索失败不崩」用）。
@@ -64,6 +70,8 @@ struct MockTMDBClient: TMDBClientProtocol {
     func company(id: Int) async throws -> CompanyDetail { company }
     func reviews(mediaKind: MediaKind, id: Int, page: Int) async throws -> Paged<Review> { reviewsPage }
     func discover(mediaKind: MediaKind, query: DiscoverQuery, page: Int) async throws -> Paged<MediaSummary> { discoverPage }
+    func movieUpcoming(page: Int) async throws -> Paged<MediaSummary> { upcomingPage }
+    func tvOnTheAir(page: Int) async throws -> Paged<MediaSummary> { onTheAirPage }
     func genreList(mediaKind: MediaKind) async throws -> [Genre] { genres }
     func watchProviders(mediaKind: MediaKind, region: String) async throws -> [WatchProvider] { providers }
 

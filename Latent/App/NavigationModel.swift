@@ -4,6 +4,7 @@ import SwiftUI
 enum SidebarScope: String, CaseIterable, Identifiable, Sendable {
     case trending
     case discover
+    case calendar
     case favorites
     case watchlist
     case history
@@ -15,6 +16,7 @@ enum SidebarScope: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .trending: return "趋势"
         case .discover: return "发现"
+        case .calendar: return "上映日历"
         case .favorites: return "收藏"
         case .watchlist: return "观看清单"
         case .history: return "历史"
@@ -26,6 +28,7 @@ enum SidebarScope: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .trending: return "chart.line.uptrend.xyaxis"
         case .discover: return "sparkles"
+        case .calendar: return "calendar"
         case .favorites: return "star"
         case .watchlist: return "bookmark"
         case .history: return "clock"
@@ -33,15 +36,16 @@ enum SidebarScope: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// 快捷键（Cmd+1…6，设计文档第 8.7 节）。
+    /// 快捷键（Cmd+1…7，设计文档第 8.7 节；v1.34 起日历进探索组）。
     var shortcutIndex: Int {
         switch self {
         case .trending: return 1
         case .discover: return 2
-        case .favorites: return 3
-        case .watchlist: return 4
-        case .history: return 5
-        case .stats: return 6
+        case .calendar: return 3
+        case .favorites: return 4
+        case .watchlist: return 5
+        case .history: return 6
+        case .stats: return 7
         }
     }
 }

@@ -85,6 +85,8 @@ struct MainSplitView: View {
             TrendingView(gridMode: gridMode, open: open)
         case .discover:
             DiscoverView(gridMode: gridMode, open: open)
+        case .calendar:
+            CalendarView(open: open)
         case .favorites:
             LibraryView(kind: .favorites, gridMode: gridMode, open: open)
         case .watchlist:
@@ -196,6 +198,7 @@ struct SidebarView: View {
                 Section("探索") {
                     row(.trending)
                     row(.discover)
+                    row(.calendar)
                 }
                 Section("我的") {
                     row(.favorites)

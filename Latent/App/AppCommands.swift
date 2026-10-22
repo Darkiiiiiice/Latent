@@ -3,7 +3,7 @@ import SwiftUI
 /// 菜单与快捷键（设计文档第 8.7 节）。
 struct AppCommands: Commands {
     var body: some Commands {
-        // 侧边栏范围快捷键：⌘1 趋势、⌘2 发现、⌘3 收藏、⌘4 观看清单、⌘5 历史、⌘6 统计
+        // 侧边栏范围快捷键：⌘1 趋势、⌘2 发现、⌘3 上映日历、⌘4 收藏、⌘5 观看清单、⌘6 历史、⌘7 统计
         CommandGroup(after: .sidebar) {
             Divider()
             ForEach(SidebarScope.allCases) { scope in

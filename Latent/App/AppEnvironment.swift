@@ -18,6 +18,8 @@ final class AppEnvironment {
     let exports = ExportCenter()
     /// 追更提醒调度（v1.25）：真实实现走 `UNUserNotificationCenter`，单测可换假实现。
     let reminders: any EpisodeReminderScheduling
+    /// 上映日提醒调度（v1.34 上映日历）。
+    let releaseReminders: any ReleaseReminderScheduling
 
     /// TMDB 连接状态（侧边栏底部状态点）。
     var connectionState: ConnectionState = .unknown
@@ -34,10 +36,12 @@ final class AppEnvironment {
     init(
         container: ModelContainer,
         client: (any TMDBClientProtocol)? = nil,
-        reminders: (any EpisodeReminderScheduling)? = nil
+        reminders: (any EpisodeReminderScheduling)? = nil,
+        releaseReminders: (any ReleaseReminderScheduling)? = nil
     ) {
         self.modelContainer = container
         self.reminders = reminders ?? LiveEpisodeReminderScheduler.shared
+        self.releaseReminders = releaseReminders ?? LiveReleaseReminderScheduler.shared
         let settings = AppSettings()
         self.settings = settings
         self.apiCache = ResponseCache()
