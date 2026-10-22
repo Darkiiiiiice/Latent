@@ -836,6 +836,7 @@ struct MediaDetailScaffold<Detail: MediaDetail, Facts: View, Extra: View>: View 
                 overviewSection(detail)
                 watchSection(detail)
                 creditsSection(detail)
+                ReviewsSection(mediaKind: detail.mediaKind, mediaID: detail.id)
                 stillsSection(detail)
                 railSection(title: "相似", media: detail.similar ?? [], open: openSummary)
                 railSection(title: "推荐", media: detail.recommendations ?? [], open: openSummary)

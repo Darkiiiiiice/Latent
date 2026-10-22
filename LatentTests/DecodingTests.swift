@@ -236,6 +236,40 @@ struct DecodingTests {
         #expect(bare.languageLabel == nil)
     }
 
+    @Test("影评：作者回退 / 外部头像剔除 / 空白正文与非法时间容错（v1.23）")
+    func reviews() throws {
+        let page = try decoder.decode(Paged<Review>.self, from: Fixtures.data("reviews"))
+        #expect(page.items.count == 3)
+        #expect(page.page == 1)
+        #expect(page.isLastPage)
+
+        let first = page.items[0]
+        #expect(first.id == "5f8a1b2c3d4e5f6a7b8c9d0e")
+        #expect(first.displayAuthor == "影迷老王")
+        #expect(first.ratingText == "9.0")
+        #expect(first.relativeCreatedText != nil) // 带毫秒的时间戳也能解析
+        #expect(first.url?.absoluteString == "https://www.themoviedb.org/review/5f8a1b2c3d4e5f6a7b8c9d0e")
+        #expect(!first.isLong)
+
+        let second = page.items[1]
+        // name 为 null → 退回 username。
+        #expect(second.displayAuthor == "quiet_observer")
+        #expect(second.avatarPath == "/avatar.jpg")
+        #expect(second.ratingText == nil)
+        #expect(second.relativeCreatedText != nil) // 不带毫秒的时间戳
+
+        let third = page.items[2]
+        // 缺 id：用「作者 + 时间」兜底，保证 ForEach 可去重。
+        #expect(third.id.hasPrefix("gravatar_user#"))
+        #expect(third.displayAuthor == "外部头像")
+        // gravatar 绝对地址不进图片管线。
+        #expect(third.avatarPath == nil)
+        #expect(third.bodyText == nil)            // 全空白正文
+        #expect(third.relativeCreatedText == nil) // 非法时间
+        #expect(third.url == nil)                 // 空串 url
+        #expect(!third.isLong)
+    }
+
     @Test("系列详情：缺 parts / 缺 id 不崩")
     func collectionTolerance() throws {
         let empty = try decoder.decode(MovieCollection.self, from: Data(#"{"name":"空系列"}"#.utf8))

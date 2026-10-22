@@ -137,6 +137,15 @@ enum Formatters {
         }
     }
 
+    /// ISO 8601 时间戳（TMDB 的 `created_at` 等）；带毫秒与不带毫秒都认。
+    static func isoDate(_ string: String?) -> Date? {
+        guard let string, !string.isEmpty else { return nil }
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFraction.date(from: string) { return date }
+        return ISO8601DateFormatter().date(from: string)
+    }
+
     private static func trimUpTo1Decimal(_ value: Double) -> String {
         let rounded = (value * 10).rounded() / 10
         if rounded == rounded.rounded() {

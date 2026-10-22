@@ -184,6 +184,23 @@ struct EndpointTests {
         #expect(!query.summaryLabel().contains("923"))
     }
 
+    @Test("影评端点：电影 / 剧集路径与分页查询（v1.23）")
+    func reviewsPath() {
+        let movie = EndpointURLBuilder.url(
+            for: .reviews(mediaKind: .movie, id: 693_134, page: 2), language: "zh-CN"
+        )
+        #expect(movie.path == "/3/movie/693134/reviews")
+        let query = URLComponents(url: movie, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        #expect(query.map(\.name) == ["language", "page"]) // 端点只带语言与页码
+        #expect(query.first { $0.name == "language" }?.value == "zh-CN")
+        #expect(query.first { $0.name == "page" }?.value == "2")
+
+        let tv = EndpointURLBuilder.url(
+            for: .reviews(mediaKind: .tv, id: 1_399, page: 1), language: "zh-CN"
+        )
+        #expect(tv.path == "/3/tv/1399/reviews")
+    }
+
     @Test("同一请求产出稳定 URL（缓存键依赖）")
     func stableURL() {
         let first = EndpointURLBuilder.url(for: .movieDetail(id: 1), language: "zh-CN")

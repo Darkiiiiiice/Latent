@@ -22,6 +22,8 @@ enum Endpoint: Sendable, Hashable {
     case collection(id: Int)
     /// GET /3/company/{id}（v1.21 制片公司）
     case company(id: Int)
+    /// GET /3/{movie,tv}/{id}/reviews（v1.23 评论聚合，只读）
+    case reviews(mediaKind: MediaKind, id: Int, page: Int)
     /// GET /3/discover/{movie,tv}
     case discover(mediaKind: MediaKind, query: DiscoverQuery, page: Int)
     /// GET /3/genre/{movie,tv}/list
@@ -63,6 +65,8 @@ enum Endpoint: Sendable, Hashable {
             return "/3/collection/\(id)"
         case .company(let id):
             return "/3/company/\(id)"
+        case .reviews(let mediaKind, let id, _):
+            return "/3/\(mediaKind == .tv ? "tv" : "movie")/\(id)/reviews"
         case .discover(let mediaKind, _, _):
             return "/3/discover/\(mediaKind == .tv ? "tv" : "movie")"
         case .genreList(let mediaKind):
@@ -81,7 +85,7 @@ enum Endpoint: Sendable, Hashable {
             return CacheTTL.trending
         case .searchMulti:
             return CacheTTL.search
-        case .movieDetail, .tvDetail, .tvSeason, .personDetail, .collection, .company, .discover:
+        case .movieDetail, .tvDetail, .tvSeason, .personDetail, .collection, .company, .discover, .reviews:
             return CacheTTL.detail
         }
     }
@@ -125,6 +129,11 @@ enum Endpoint: Sendable, Hashable {
             return [URLQueryItem(name: "language", value: language)]
         case .company:
             return [URLQueryItem(name: "language", value: language)]
+        case .reviews(_, _, let page):
+            return [
+                URLQueryItem(name: "language", value: language),
+                URLQueryItem(name: "page", value: String(page)),
+            ]
         case .discover(let mediaKind, let query, let page):
             let dateField = mediaKind == .tv ? "first_air_date" : "primary_release_date"
             var items: [URLQueryItem] = [

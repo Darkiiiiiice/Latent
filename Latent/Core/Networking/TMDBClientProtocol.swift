@@ -11,6 +11,7 @@ protocol TMDBClientProtocol: Sendable {
     func personDetail(id: Int) async throws -> PersonDetail
     func collection(id: Int) async throws -> MovieCollection
     func company(id: Int) async throws -> CompanyDetail
+    func reviews(mediaKind: MediaKind, id: Int, page: Int) async throws -> Paged<Review>
     func discover(mediaKind: MediaKind, query: DiscoverQuery, page: Int) async throws -> Paged<MediaSummary>
     func genreList(mediaKind: MediaKind) async throws -> [Genre]
     func watchProviders(mediaKind: MediaKind, region: String) async throws -> [WatchProvider]
@@ -42,6 +43,7 @@ struct MockTMDBClient: TMDBClientProtocol {
     var person: PersonDetail = .sample
     var collection: MovieCollection = .sample
     var company: CompanyDetail = .sample
+    var reviewsPage = Paged(page: 1, items: Review.samples, totalPages: 1, totalResults: Review.samples.count)
     var discoverPage = Paged(page: 1, items: MediaSummary.samples(count: 18, kind: .movie), totalPages: 2, totalResults: 36)
     var genres: [Genre] = Genre.samples
     var providers: [WatchProvider] = WatchProvider.samples
@@ -60,6 +62,7 @@ struct MockTMDBClient: TMDBClientProtocol {
     func personDetail(id: Int) async throws -> PersonDetail { person }
     func collection(id: Int) async throws -> MovieCollection { collection }
     func company(id: Int) async throws -> CompanyDetail { company }
+    func reviews(mediaKind: MediaKind, id: Int, page: Int) async throws -> Paged<Review> { reviewsPage }
     func discover(mediaKind: MediaKind, query: DiscoverQuery, page: Int) async throws -> Paged<MediaSummary> { discoverPage }
     func genreList(mediaKind: MediaKind) async throws -> [Genre] { genres }
     func watchProviders(mediaKind: MediaKind, region: String) async throws -> [WatchProvider] { providers }
@@ -118,6 +121,23 @@ extension WatchProvider {
         WatchProvider(providerID: 8, providerName: "Netflix", logoPath: "/netflix.jpg", displayPriority: 0),
         WatchProvider(providerID: 337, providerName: "Disney+", logoPath: "/disney.jpg", displayPriority: 1),
         WatchProvider(providerID: 1899, providerName: "HBO Max", logoPath: "/hbo.jpg", displayPriority: 2),
+    ]
+}
+
+extension Review {
+    static let samples: [Review] = [
+        Review(
+            id: "a1", author: "filmnerd",
+            authorDetails: ReviewAuthor(name: "影迷老王", username: "filmnerd", avatarPath: nil, rating: 9),
+            content: "维伦纽瓦把沙丘拍成了一场仪式。沙虫出场那一幕，整个影厅都屏住了呼吸。",
+            createdAt: "2024-03-05T10:00:00.000Z", url: URL(string: "https://www.themoviedb.org/review/a1")
+        ),
+        Review(
+            id: "a2", author: "quiet_observer",
+            authorDetails: ReviewAuthor(name: nil, username: "quiet_observer", avatarPath: "/avatar.jpg", rating: nil),
+            content: "视效与音效都是顶级，但节奏比第一部更慢。喜欢的人会觉得是史诗，不喜欢的人会觉得是折磨。",
+            createdAt: "2024-03-01T08:30:00.000Z"
+        ),
     ]
 }
 
