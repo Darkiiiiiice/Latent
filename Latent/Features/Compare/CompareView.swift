@@ -43,9 +43,21 @@ struct CompareView: View {
 
     private var heading: some View {
         VStack(alignment: .leading, spacing: UI.Spacing.s1) {
-            Text("对比")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(UI.Palette.textPrimary)
+            HStack(spacing: UI.Spacing.s3) {
+                Text("对比")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(UI.Palette.textPrimary)
+
+                Button("找关系路径") {
+                    NotificationCenter.default.post(
+                        name: AppCommandBus.pushDetail,
+                        object: DetailDestination.sixDegrees(left: left, right: right)
+                    )
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("查找两部作品之间经演员 / 导演的最短关系路径")
+            }
             Text("\(left.title)　与　\(right.title)")
                 .font(.system(size: 12))
                 .lineLimit(1)

@@ -241,6 +241,14 @@ struct LibraryView: View {
             .disabled(selectedPairs.count != 2)
             .help("选中恰好两部影视作品后并排对比")
 
+            Button("找关系") {
+                startSixDegrees()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(selectedPairs.count != 2)
+            .help("选中恰好两部影视作品后查找经演员 / 导演的关系路径")
+
             Button(kind.opposite == .watchlist ? "移到观看清单" : "移到收藏") {
                 moveSelected()
             }
@@ -381,6 +389,17 @@ struct LibraryView: View {
         NotificationCenter.default.post(
             name: AppCommandBus.pushDetail,
             object: DetailDestination.compare(left: picked[0], right: picked[1])
+        )
+    }
+
+    /// 恰好选中两部时查找六度分隔关系路径；顺序即列表顺序（左 = 靠前的那部）。
+    private func startSixDegrees() {
+        let picked = selectedPairs
+        guard picked.count == 2 else { return }
+        endSelection()
+        NotificationCenter.default.post(
+            name: AppCommandBus.pushDetail,
+            object: DetailDestination.sixDegrees(left: picked[0], right: picked[1])
         )
     }
 

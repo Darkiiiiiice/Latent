@@ -16,6 +16,8 @@ struct DetailRouteView: View {
             CompanyDetailView(companyID: id, fallbackName: name)
         case .compare(let left, let right):
             CompareView(left: left, right: right)
+        case .sixDegrees(let left, let right):
+            SixDegreesView(left: left, right: right)
         }
     }
 }

@@ -59,6 +59,8 @@ enum DetailDestination: Hashable, Sendable {
     case company(id: Int, name: String?)
     /// 对比两部作品（v1.32）；两侧都是影视条目（人物 / 公司不可比）。
     case compare(left: MediaSummary, right: MediaSummary)
+    /// 六度分隔（v1.35）：两部作品之间经演员 / 导演的最短关系路径。
+    case sixDegrees(left: MediaSummary, right: MediaSummary)
 }
 
 extension DetailDestination {
@@ -69,6 +71,8 @@ extension DetailDestination {
         case let (.person(lID), .person(rID)): return lID == rID
         case let (.company(lID, _), .company(rID, _)): return lID == rID
         case let (.compare(lLeft, lRight), .compare(rLeft, rRight)):
+            return lLeft.stableID == rLeft.stableID && lRight.stableID == rRight.stableID
+        case let (.sixDegrees(lLeft, lRight), .sixDegrees(rLeft, rRight)):
             return lLeft.stableID == rLeft.stableID && lRight.stableID == rRight.stableID
         default: return false
         }
@@ -86,6 +90,10 @@ extension DetailDestination {
             hasher.combine("company"); hasher.combine(id)
         case .compare(let left, let right):
             hasher.combine("compare")
+            hasher.combine(left.stableID)
+            hasher.combine(right.stableID)
+        case .sixDegrees(let left, let right):
+            hasher.combine("sixDegrees")
             hasher.combine(left.stableID)
             hasher.combine(right.stableID)
         }
