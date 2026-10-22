@@ -10,9 +10,11 @@ struct ReceiptSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var style: ReceiptStyle = .thermal
+    /// 版式（v1.28）：经典 / 侧栏 / 全幅 / 索引。
+    @State private var layout: ReceiptLayout = .classic
     /// 海报保留封面原色（默认关：走该风格的固有双色调 / 灰度处理）。
     @State private var keepsPosterColors = false
-    /// 卡片配色取自封面（默认关：保持七款锁定配色）。开启后用封面主色 / 辅色重算整卡配色。
+    /// 卡片配色取自封面（默认关：保持十八款锁定配色）。开启后用封面主色 / 辅色重算整卡配色。
     @State private var followsPoster = false
     @State private var poster: CGImage?
     @State private var posterColors: ReceiptPosterColors?
@@ -30,9 +32,9 @@ struct ReceiptSheet: View {
         keepsPosterColors ? .original : style.posterMode
     }
 
-    /// 重新生成系统分享图的触发键：风格 / 两个开关 / 海报是否就位。
+    /// 重新生成系统分享图的触发键：版式 / 风格 / 两个开关 / 海报是否就位。
     private var shareKey: String {
-        "\(style.rawValue)|\(keepsPosterColors)|\(followsPoster)|\(poster != nil)"
+        "\(layout.rawValue)|\(style.rawValue)|\(keepsPosterColors)|\(followsPoster)|\(poster != nil)"
     }
 
     private let previewScale: CGFloat = 0.6
@@ -93,7 +95,8 @@ struct ReceiptSheet: View {
 
     private var preview: some View {
         ReceiptCardView(
-            data: data, style: style, palette: palette, posterMode: posterMode, poster: poster
+            data: data, style: style, palette: palette, posterMode: posterMode,
+            poster: poster, layout: layout
         )
             .scaleEffect(previewScale, anchor: .topLeading)
             .frame(
@@ -110,6 +113,8 @@ struct ReceiptSheet: View {
 
     private var styleList: some View {
         VStack(alignment: .leading, spacing: UI.Spacing.s3) {
+            layoutPicker
+
             HStack {
                 Text("风格")
                     .font(.system(size: 12, weight: .medium))
@@ -125,11 +130,11 @@ struct ReceiptSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: UI.Spacing.s3) {
                     styleGroup("电影感", styles: ReceiptStyle.cinematic)
-                    styleGroup("编辑器主题", styles: ReceiptStyle.editorThemes)
+                    styleGroup("主题", styles: ReceiptStyle.themes)
                 }
                 .padding(.trailing, 2)
             }
-            .frame(height: 300)
+            .frame(height: 260)
 
             Text("封面")
                 .font(.system(size: 12, weight: .medium))
@@ -154,6 +159,28 @@ struct ReceiptSheet: View {
             Spacer(minLength: 0)
         }
         .frame(width: 340, alignment: .leading)
+    }
+
+    private var layoutPicker: some View {
+        VStack(alignment: .leading, spacing: UI.Spacing.s2) {
+            HStack(spacing: UI.Spacing.s2) {
+                Text("布局")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(UI.Palette.textSecondary)
+                Spacer(minLength: 0)
+                Text(layout.hint)
+                    .font(.system(size: 11))
+                    .lineLimit(1)
+                    .foregroundStyle(UI.Palette.textSecondary)
+            }
+            Picker("布局", selection: $layout) {
+                ForEach(ReceiptLayout.allCases) { item in
+                    Text(item.displayName).tag(item)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+        }
     }
 
     private func styleGroup(_ title: String, styles: [ReceiptStyle]) -> some View {
@@ -243,7 +270,8 @@ struct ReceiptSheet: View {
     /// 生成 `ShareLink` 用的位图（与导出同一张卡、同一尺寸）。
     private func updateShareImage() {
         guard let image = ReceiptRenderer.cgImage(
-            data: data, style: style, palette: palette, posterMode: posterMode, poster: poster
+            data: data, style: style, palette: palette, posterMode: posterMode,
+            poster: poster, layout: layout
         ) else {
             shareImage = nil
             return
@@ -253,7 +281,8 @@ struct ReceiptSheet: View {
 
     private func copyToPasteboard() {
         guard let image = ReceiptRenderer.cgImage(
-            data: data, style: style, palette: palette, posterMode: posterMode, poster: poster
+            data: data, style: style, palette: palette, posterMode: posterMode,
+            poster: poster, layout: layout
         ) else {
             ToastCenter.shared.show("分享卡生成失败")
             return
@@ -266,7 +295,8 @@ struct ReceiptSheet: View {
 
     private func save() {
         guard let png = ReceiptRenderer.pngData(
-            data: data, style: style, palette: palette, posterMode: posterMode, poster: poster
+            data: data, style: style, palette: palette, posterMode: posterMode,
+            poster: poster, layout: layout
         ) else {
             ToastCenter.shared.show("分享卡生成失败")
             return

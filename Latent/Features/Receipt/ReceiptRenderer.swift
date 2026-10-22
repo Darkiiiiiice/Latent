@@ -14,6 +14,38 @@ enum ReceiptCanvas {
     }
 }
 
+/// 分享卡版式（v1.28）：配色之外的第二个维度，只改排版，不改调色板。
+enum ReceiptLayout: String, CaseIterable, Identifiable, Hashable, Sendable {
+    /// 海报居中、信息在下（v1.2 起的默认版式）。
+    case classic
+    /// 左海报、右信息，字段多也不挤。
+    case split
+    /// 海报铺满整卡，信息压在底部渐隐层上。
+    case immersive
+    /// 文字优先的档案卡：标题在左、封面作缩略图。
+    case index
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .classic: "经典"
+        case .split: "侧栏"
+        case .immersive: "全幅"
+        case .index: "索引"
+        }
+    }
+
+    var hint: String {
+        switch self {
+        case .classic: "海报居中，信息在下"
+        case .split: "左图右文，字段多也不挤"
+        case .immersive: "海报铺满，信息压底"
+        case .index: "文字优先，封面作缩略图"
+        }
+    }
+}
+
 /// 分享卡本体：预览与导出共用同一张视图（所见即所得）。
 struct ReceiptCardView: View {
     let data: ReceiptData
@@ -22,6 +54,8 @@ struct ReceiptCardView: View {
     /// 海报处理方式：风格固有（双色调等）或「保留封面原色」。
     let posterMode: ReceiptPosterMode
     let poster: CGImage?
+    /// 版式（v1.28；默认经典版式）。
+    var layout: ReceiptLayout = .classic
 
     var body: some View {
         ZStack {
@@ -35,7 +69,18 @@ struct ReceiptCardView: View {
 
     // MARK: - 内容
 
+    @ViewBuilder
     private var content: some View {
+        switch layout {
+        case .classic: classicContent
+        case .split: splitContent
+        case .immersive: immersiveContent
+        case .index: indexContent
+        }
+    }
+
+    /// 经典：海报居中、信息在下（v1.2 起的版式）。
+    private var classicContent: some View {
         VStack(spacing: 0) {
             topDecoration
             VStack(spacing: 0) {
@@ -50,6 +95,151 @@ struct ReceiptCardView: View {
         }
         // 上下留白放在最外层：色带 / 报头等装饰同样内缩 28，四款观感一致。
         .padding(.vertical, 28)
+    }
+
+    /// 侧栏：左海报、右标题与字段。
+    private var splitContent: some View {
+        VStack(spacing: 0) {
+            topDecoration
+            HStack(alignment: .top, spacing: 30) {
+                posterBlock(size: CGSize(width: 168, height: 252))
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(data.title)
+                        .font(.system(size: 23, weight: .bold))
+                        .lineLimit(3)
+                        .minimumScaleFactor(0.7)
+                        .foregroundStyle(palette.ink.color)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let original = data.originalTitle {
+                        Text(original.uppercased())
+                            .font(.system(size: 10, weight: .medium))
+                            .tracking(1.6)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .foregroundStyle(palette.ink.color.opacity(0.55))
+                            .padding(.top, 5)
+                    }
+                    if data.rating != nil || data.voteCount != nil {
+                        ratingBadge
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    compactFields
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 44)
+            .padding(.top, 22)
+            Spacer(minLength: 12)
+            footer
+                .padding(.horizontal, 44)
+        }
+        .padding(.vertical, 28)
+    }
+
+    /// 全幅：海报铺满整卡，信息压在底部渐隐层上。
+    private var immersiveContent: some View {
+        ZStack(alignment: .bottom) {
+            fullBleedPoster
+            LinearGradient(
+                stops: [
+                    .init(color: palette.paper.color.opacity(0), location: 0),
+                    .init(color: palette.paper.color.opacity(0.82), location: 0.55),
+                    .init(color: palette.paper.color.opacity(0.96), location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 420)
+            .frame(maxHeight: .infinity, alignment: .bottom)
+
+            VStack(spacing: 0) {
+                topDecoration
+                Spacer(minLength: 0)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(data.title)
+                        .font(.system(size: 24, weight: .bold))
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.7)
+                        .foregroundStyle(palette.ink.color)
+                    if let original = data.originalTitle {
+                        Text(original.uppercased())
+                            .font(.system(size: 10, weight: .medium))
+                            .tracking(1.6)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .foregroundStyle(palette.ink.color.opacity(0.6))
+                            .padding(.top, 4)
+                    }
+                    if data.rating != nil || data.voteCount != nil {
+                        ratingBadge
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    compactFields
+                    footer
+                        .padding(.top, 8)
+                }
+                .padding(.horizontal, 44)
+                .padding(.bottom, 28)
+            }
+            .padding(.top, 28)
+        }
+    }
+
+    /// 索引：文字优先的档案卡，封面缩略图在右上。
+    private var indexContent: some View {
+        VStack(spacing: 0) {
+            topDecoration
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(indexLabel)
+                            .font(.system(size: 9, weight: .bold))
+                            .tracking(2.4)
+                            .foregroundStyle(palette.accent.color)
+                        Text(data.title)
+                            .font(.system(size: 24, weight: .bold))
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.7)
+                            .foregroundStyle(palette.ink.color)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let original = data.originalTitle {
+                            Text(original.uppercased())
+                                .font(.system(size: 10, weight: .medium))
+                                .tracking(1.6)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                                .foregroundStyle(palette.ink.color.opacity(0.55))
+                        }
+                        if data.rating != nil || data.voteCount != nil {
+                            ratingBadge
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    posterBlock(size: CGSize(width: 108, height: 162))
+                }
+                .padding(.top, 18)
+
+                Rectangle()
+                    .fill(palette.ink.color.opacity(0.2))
+                    .frame(height: 1)
+                    .padding(.top, 16)
+
+                compactFields
+
+                Spacer(minLength: 10)
+                footer
+            }
+            .padding(.horizontal, 44)
+        }
+        .padding(.vertical, 28)
+    }
+
+    private var indexLabel: String {
+        if let subject = data.subjectLabel {
+            return "显影 · \(subject)档案"
+        }
+        return "显影 · 电影档案"
     }
 
     @ViewBuilder
@@ -237,6 +427,10 @@ struct ReceiptCardView: View {
     // MARK: 海报
 
     private var posterBlock: some View {
+        posterBlock(size: style.posterSize)
+    }
+
+    private func posterBlock(size: CGSize) -> some View {
         Group {
             if let processed = processedPoster {
                 Image(decorative: processed, scale: 1)
@@ -251,11 +445,30 @@ struct ReceiptCardView: View {
                 )
             }
         }
-        .frame(width: style.posterSize.width, height: style.posterSize.height)
+        .frame(width: size.width, height: size.height)
         .clipShape(posterShape)
         .overlay {
             posterShape.stroke(palette.accent.color, lineWidth: 2)
         }
+    }
+
+    /// 全幅版式用：海报铺满整卡（无海报时同样用双色调占位）。
+    private var fullBleedPoster: some View {
+        Group {
+            if let processed = processedPoster {
+                Image(decorative: processed, scale: 1)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                LinearGradient(
+                    colors: [palette.duoDark.color, palette.duoLight.color],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+        }
+        .frame(width: ReceiptCanvas.size.width, height: ReceiptCanvas.size.height)
+        .clipped()
     }
 
     private var processedPoster: CGImage? {
@@ -347,6 +560,40 @@ struct ReceiptCardView: View {
         .padding(.top, 10)
     }
 
+    /// 紧凑字段表（侧栏 / 全幅 / 索引用；行高比经典版式小一档）。
+    private var compactFields: some View {
+        VStack(spacing: 0) {
+            if !data.fields.isEmpty {
+                Rectangle()
+                    .fill(palette.accent.color)
+                    .frame(height: 2)
+                    .padding(.bottom, 3)
+            }
+            ForEach(data.fields) { field in
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(field.label.uppercased())
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(1.4)
+                        .foregroundStyle(palette.accent.color)
+                        .frame(width: 48, alignment: .leading)
+                    Text(field.value)
+                        .font(.system(size: 12, weight: .medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .foregroundStyle(palette.ink.color)
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 5)
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(palette.ink.color.opacity(0.13))
+                        .frame(height: 1)
+                }
+            }
+        }
+        .padding(.top, 10)
+    }
+
     private var footer: some View {
         VStack(spacing: 7) {
             Rectangle()
@@ -385,11 +632,13 @@ enum ReceiptRenderer {
         style: ReceiptStyle,
         palette: ReceiptPalette,
         posterMode: ReceiptPosterMode,
-        poster: CGImage?
+        poster: CGImage?,
+        layout: ReceiptLayout = .classic
     ) -> CGImage? {
         let renderer = ImageRenderer(
             content: ReceiptCardView(
-                data: data, style: style, palette: palette, posterMode: posterMode, poster: poster
+                data: data, style: style, palette: palette, posterMode: posterMode,
+                poster: poster, layout: layout
             )
         )
         renderer.scale = ReceiptCanvas.exportScale
@@ -401,10 +650,12 @@ enum ReceiptRenderer {
         style: ReceiptStyle,
         palette: ReceiptPalette,
         posterMode: ReceiptPosterMode,
-        poster: CGImage?
+        poster: CGImage?,
+        layout: ReceiptLayout = .classic
     ) -> Data? {
         guard let image = cgImage(
-            data: data, style: style, palette: palette, posterMode: posterMode, poster: poster
+            data: data, style: style, palette: palette, posterMode: posterMode,
+            poster: poster, layout: layout
         ) else { return nil }
         return pngData(from: image)
     }

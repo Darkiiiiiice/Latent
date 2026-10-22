@@ -184,14 +184,14 @@ struct ReceiptTests {
 
     // MARK: - 调色板
 
-    @Test("十八款固有调色板齐全：强调色互不相同，编辑器主题齐全")
+    @Test("十八款固有调色板齐全：强调色互不相同，主题齐全")
     func palettesAreDistinct() {
         let styles = ReceiptStyle.allCases
         #expect(styles.count == 18)
         #expect(Set(styles.map(\.basePalette.accent)).count == styles.count)
         #expect(ReceiptStyle.cinematic.count == 10)
-        #expect(ReceiptStyle.editorThemes.count == 8)
-        #expect(ReceiptStyle.editorThemes.allSatisfy { $0.decoration == .none })
+        #expect(ReceiptStyle.themes.count == 8)
+        #expect(ReceiptStyle.themes.allSatisfy { $0.decoration == .none })
         #expect(styles.allSatisfy { !$0.displayName.isEmpty })
     }
 
@@ -431,7 +431,7 @@ struct ReceiptTests {
 
     // MARK: - 渲染导出
 
-    @Test("十款风格都能导出 1080×1440 图像")
+    @Test("十八款风格都能导出 1080×1440 图像")
     func rendersExportSize() {
         let data = ReceiptData.build(from: MovieDetail(
             id: 1, title: "测试影片", dateString: "2024-01-01",
@@ -444,6 +444,27 @@ struct ReceiptTests {
                 data: data, style: style, palette: style.basePalette, posterMode: style.posterMode, poster: nil
             )
             #expect(image != nil, "\(style.displayName) 渲染失败")
+            #expect(image?.width == 1080)
+            #expect(image?.height == 1440)
+        }
+    }
+
+    @Test("四款版式都能导出 1080×1440，名称互不相同")
+    func rendersAllLayouts() {
+        let data = ReceiptData.build(from: MovieDetail(
+            id: 1, title: "测试影片", originalTitle: "Test Movie",
+            dateString: "2024-01-01", voteAverage: 7.5, voteCount: 10,
+            runtime: 100
+        ))
+        #expect(ReceiptLayout.allCases.count == 4)
+        #expect(Set(ReceiptLayout.allCases.map(\.displayName)).count == 4)
+
+        for layout in ReceiptLayout.allCases {
+            let image = ReceiptRenderer.cgImage(
+                data: data, style: .dracula, palette: ReceiptStyle.dracula.basePalette,
+                posterMode: .duotone, poster: nil, layout: layout
+            )
+            #expect(image != nil, "\(layout.displayName) 版式渲染失败")
             #expect(image?.width == 1080)
             #expect(image?.height == 1440)
         }

@@ -3,7 +3,7 @@ import CoreImage
 
 /// 分享卡配色（设计文档第 8.10 节）。
 ///
-/// **十八款风格的固有调色板（v1.2 的七款 + v1.26 的三款 + v1.27 的八款编辑器主题）**。双层机制：
+/// **十八款风格的固有调色板（v1.2 的七款 + v1.26 的三款 + v1.27 的八款主题）**。双层机制：
 /// ① 固有调色板（`ReceiptStyle.basePalette`）；
 /// ② 海报驱动动态取色（`ReceiptPalette.dynamic(base:poster:)` —— 色相取自海报主色，
 /// 饱和度 / 明度约束在风格固有区间内，因此十八款仍互相可辨识）。
@@ -18,7 +18,7 @@ enum ReceiptStyle: String, CaseIterable, Identifiable, Hashable, Sendable {
     case midnight
     case sunset
     case clapper
-    // v1.27：编辑器主题（配色取自常见的代码配色方案）
+    // v1.27：主题（配色取自常见的代码配色方案）
     case dracula
     case nord
     case monokai
@@ -34,21 +34,21 @@ enum ReceiptStyle: String, CaseIterable, Identifiable, Hashable, Sendable {
     enum Family: Hashable, Sendable {
         /// 电影感（票据、胶片、印刷等实体意象）。
         case cinematic
-        /// 编辑器主题（取自常见代码配色，无实体装饰）。
-        case editor
+        /// 主题（配色取自常见代码配色方案，无实体装饰）。
+        case theme
     }
 
     var family: Family {
         switch self {
         case .dracula, .nord, .monokai, .oneDark, .solarized, .gruvbox, .catppuccin, .tokyoNight:
-            .editor
+            .theme
         default:
             .cinematic
         }
     }
 
     static var cinematic: [ReceiptStyle] { allCases.filter { $0.family == .cinematic } }
-    static var editorThemes: [ReceiptStyle] { allCases.filter { $0.family == .editor } }
+    static var themes: [ReceiptStyle] { allCases.filter { $0.family == .theme } }
 
     /// 界面显示名（`allCases` 顺序即界面顺序）。
     var displayName: String {
@@ -117,7 +117,7 @@ enum ReceiptStyle: String, CaseIterable, Identifiable, Hashable, Sendable {
             ReceiptPalette(paper: ReceiptColor(hex: 0x0B0B0C), ink: ReceiptColor(hex: 0xF4F4F0),
                            accent: ReceiptColor(hex: 0xFFC400),
                            duoDark: ReceiptColor(hex: 0x1A1A1A), duoLight: ReceiptColor(hex: 0xE6E6E6))
-        // 编辑器主题：纸底取各自背景色，墨色取前景色（必要时提亮到可读），
+        // 主题：纸底取各自背景色，墨色取前景色（必要时提亮到可读），
         // 强调色取各自的关键字 / 强调色，双色调取「注释 / 字符串」这类次要色彩。
         case .dracula:
             ReceiptPalette(paper: ReceiptColor(hex: 0x282A36), ink: ReceiptColor(hex: 0xF8F8F2),
@@ -193,7 +193,7 @@ enum ReceiptStyle: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .midnight: .neonFrame
         case .sunset: .horizon
         case .clapper: .slate
-        // 编辑器主题只换配色，不加实体装饰（保持干净的「代码页」观感）。
+        // 主题只换配色，不加实体装饰（保持干净的「代码页」观感）。
         case .dracula, .nord, .monokai, .oneDark,
              .solarized, .gruvbox, .catppuccin, .tokyoNight: .none
         }
