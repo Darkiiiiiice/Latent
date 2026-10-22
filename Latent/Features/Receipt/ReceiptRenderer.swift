@@ -14,7 +14,7 @@ enum ReceiptCanvas {
     }
 }
 
-/// 分享卡版式（v1.28）：配色之外的第二个维度，只改排版，不改调色板。
+/// 分享卡版式（v1.28 起）：配色之外的第二个维度，只改排版，不改调色板。
 enum ReceiptLayout: String, CaseIterable, Identifiable, Hashable, Sendable {
     /// 海报居中、信息在下（v1.2 起的默认版式）。
     case classic
@@ -24,15 +24,25 @@ enum ReceiptLayout: String, CaseIterable, Identifiable, Hashable, Sendable {
     case immersive
     /// 文字优先的档案卡：标题在左、封面作缩略图。
     case index
+    /// 杂志跨页（v1.29）：顶部横幅出血海报，下半左右双栏。
+    case magazine
+    /// 文字海报（v1.29）：不放海报，纯排版大字。
+    case billboard
+    /// 竖排（v1.29）：标题逐字竖排，封面在左。
+    case column
 
     var id: String { rawValue }
 
+    /// 选择器标签（一律两字，七段在 340pt 宽的面板里才不会截断）。
     var displayName: String {
         switch self {
         case .classic: "经典"
         case .split: "侧栏"
         case .immersive: "全幅"
         case .index: "索引"
+        case .magazine: "杂志"
+        case .billboard: "大字"
+        case .column: "竖排"
         }
     }
 
@@ -42,6 +52,9 @@ enum ReceiptLayout: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .split: "左图右文，字段多也不挤"
         case .immersive: "海报铺满，信息压底"
         case .index: "文字优先，封面作缩略图"
+        case .magazine: "顶部横幅海报，下分两栏"
+        case .billboard: "不放海报，纯排版大字"
+        case .column: "标题逐字竖排，封面在左"
         }
     }
 }
@@ -76,6 +89,9 @@ struct ReceiptCardView: View {
         case .split: splitContent
         case .immersive: immersiveContent
         case .index: indexContent
+        case .magazine: magazineContent
+        case .billboard: billboardContent
+        case .column: columnContent
         }
     }
 
@@ -240,6 +256,180 @@ struct ReceiptCardView: View {
             return "显影 · \(subject)档案"
         }
         return "显影 · 电影档案"
+    }
+
+    /// 杂志跨页（v1.29）：顶部横幅海报出血铺满左右，下半左标题右字段。
+    private var magazineContent: some View {
+        VStack(spacing: 0) {
+            topDecoration
+            bleedPoster(size: CGSize(width: ReceiptCanvas.size.width, height: 250))
+            HStack(alignment: .top, spacing: 26) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(data.title)
+                        .font(.system(size: 25, weight: .bold))
+                        .lineLimit(3)
+                        .minimumScaleFactor(0.65)
+                        .foregroundStyle(palette.ink.color)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let original = data.originalTitle {
+                        Text(original.uppercased())
+                            .font(.system(size: 10, weight: .medium))
+                            .tracking(1.6)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.7)
+                            .foregroundStyle(palette.ink.color.opacity(0.55))
+                            .padding(.top, 6)
+                    }
+                    if data.rating != nil || data.voteCount != nil {
+                        ratingBadge
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .frame(width: 196, alignment: .leading)
+
+                VStack(alignment: .leading, spacing: 0) {
+                    compactFields
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 44)
+            .padding(.top, 22)
+
+            Spacer(minLength: 10)
+            footer
+                .padding(.horizontal, 44)
+        }
+        .padding(.top, 28)
+        .padding(.bottom, 28)
+    }
+
+    /// 文字海报（v1.29）：不放海报，用超大标题占住视觉重心。
+    private var billboardContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            topDecoration
+            VStack(alignment: .leading, spacing: 0) {
+                Text(indexLabel)
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(2.6)
+                    .foregroundStyle(palette.accent.color)
+
+                Spacer(minLength: 0)
+
+                Text(data.title)
+                    .font(.system(size: 46, weight: .bold))
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.42)
+                    .foregroundStyle(palette.ink.color)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let original = data.originalTitle {
+                    Text(original.uppercased())
+                        .font(.system(size: 11, weight: .medium))
+                        .tracking(2)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.7)
+                        .foregroundStyle(palette.ink.color.opacity(0.55))
+                        .padding(.top, 10)
+                }
+
+                if data.rating != nil || data.voteCount != nil {
+                    ratingBadge
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 4)
+                }
+
+                compactFields
+
+                Spacer(minLength: 0)
+                footer
+            }
+            .padding(.horizontal, 44)
+        }
+        .padding(.vertical, 28)
+    }
+
+    /// 竖排（v1.29）：封面在左、字段在其下，标题在右逐字向下排。
+    private var columnContent: some View {
+        VStack(spacing: 0) {
+            topDecoration
+            HStack(alignment: .top, spacing: 30) {
+                VStack(alignment: .leading, spacing: 0) {
+                    posterBlock(size: CGSize(width: 150, height: 225))
+                    compactFields
+                    Spacer(minLength: 0)
+                }
+                .frame(width: 150, alignment: .leading)
+
+                VStack(alignment: .trailing, spacing: 0) {
+                    verticalTitle
+                    if let original = data.originalTitle {
+                        Text(original.uppercased())
+                            .font(.system(size: 10, weight: .medium))
+                            .tracking(1.6)
+                            .multilineTextAlignment(.trailing)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.7)
+                            .foregroundStyle(palette.ink.color.opacity(0.55))
+                            .padding(.top, 14)
+                    }
+                    if data.rating != nil || data.voteCount != nil {
+                        ratingBadge
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                            .padding(.top, 8)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                // 给票根的虚线副券留出右边距，竖排字不压线。
+                .padding(.trailing, 20)
+            }
+            .padding(.horizontal, 44)
+            .padding(.top, 18)
+
+            Spacer(minLength: 12)
+            footer
+                .padding(.horizontal, 44)
+        }
+        .padding(.vertical, 28)
+    }
+
+    /// 竖排标题：中日韩标题逐字向下排（最多 9 字），拉丁标题回退为横排换行。
+    @ViewBuilder
+    private var verticalTitle: some View {
+        if fitsVerticalTypesetting {
+            VStack(spacing: 0) {
+                ForEach(Array(data.title.prefix(9).enumerated()), id: \.offset) { _, character in
+                    Text(String(character))
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundStyle(palette.ink.color)
+                }
+            }
+        } else {
+            Text(data.title)
+                .font(.system(size: 26, weight: .bold))
+                .multilineTextAlignment(.trailing)
+                .lineLimit(3)
+                .minimumScaleFactor(0.7)
+                .foregroundStyle(palette.ink.color)
+        }
+    }
+
+    /// 标题是否适合竖排：中日韩字符过半才算（「Dune: Part Two」逐字竖排会很怪）。
+    private var fitsVerticalTypesetting: Bool {
+        let characters = data.title.filter { !$0.isWhitespace }
+        guard !characters.isEmpty else { return false }
+        let cjkCount = characters.filter { character in
+            character.unicodeScalars.allSatisfy { scalar in
+                switch scalar.value {
+                case 0x3400...0x4DBF, 0x4E00...0x9FFF, 0xF900...0xFAFF,
+                     0x3040...0x30FF, 0xAC00...0xD7AF:
+                    true
+                default:
+                    false
+                }
+            }
+        }.count
+        return cjkCount * 2 >= characters.count
     }
 
     @ViewBuilder
@@ -454,6 +644,11 @@ struct ReceiptCardView: View {
 
     /// 全幅版式用：海报铺满整卡（无海报时同样用双色调占位）。
     private var fullBleedPoster: some View {
+        bleedPoster(size: ReceiptCanvas.size)
+    }
+
+    /// 出血海报：按给定尺寸铺满并裁切（杂志版式的横幅也走这一支）。
+    private func bleedPoster(size: CGSize) -> some View {
         Group {
             if let processed = processedPoster {
                 Image(decorative: processed, scale: 1)
@@ -467,7 +662,7 @@ struct ReceiptCardView: View {
                 )
             }
         }
-        .frame(width: ReceiptCanvas.size.width, height: ReceiptCanvas.size.height)
+        .frame(width: size.width, height: size.height)
         .clipped()
     }
 

@@ -449,15 +449,16 @@ struct ReceiptTests {
         }
     }
 
-    @Test("四款版式都能导出 1080×1440，名称互不相同")
+    @Test("七款版式都能导出 1080×1440，名称互不相同")
     func rendersAllLayouts() {
         let data = ReceiptData.build(from: MovieDetail(
             id: 1, title: "测试影片", originalTitle: "Test Movie",
             dateString: "2024-01-01", voteAverage: 7.5, voteCount: 10,
             runtime: 100
         ))
-        #expect(ReceiptLayout.allCases.count == 4)
-        #expect(Set(ReceiptLayout.allCases.map(\.displayName)).count == 4)
+        #expect(ReceiptLayout.allCases.count == 7)
+        #expect(Set(ReceiptLayout.allCases.map(\.displayName)).count == 7)
+        #expect(ReceiptLayout.allCases.allSatisfy { !$0.hint.isEmpty })
 
         for layout in ReceiptLayout.allCases {
             let image = ReceiptRenderer.cgImage(
