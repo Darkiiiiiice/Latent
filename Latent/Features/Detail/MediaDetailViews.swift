@@ -14,6 +14,8 @@ struct DetailRouteView: View {
             PersonDetailView(personID: id)
         case .company(let id, let name):
             CompanyDetailView(companyID: id, fallbackName: name)
+        case .compare(let left, let right):
+            CompareView(left: left, right: right)
         }
     }
 }

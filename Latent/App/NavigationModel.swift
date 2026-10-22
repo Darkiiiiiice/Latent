@@ -53,6 +53,8 @@ enum DetailDestination: Hashable, Sendable {
     case person(id: Int)
     /// 制片公司页（v1.21）；`name` 用于载入期间先显示标题。
     case company(id: Int, name: String?)
+    /// 对比两部作品（v1.32）；两侧都是影视条目（人物 / 公司不可比）。
+    case compare(left: MediaSummary, right: MediaSummary)
 }
 
 extension DetailDestination {
@@ -62,6 +64,8 @@ extension DetailDestination {
         case let (.tv(lID, _), .tv(rID, _)): return lID == rID
         case let (.person(lID), .person(rID)): return lID == rID
         case let (.company(lID, _), .company(rID, _)): return lID == rID
+        case let (.compare(lLeft, lRight), .compare(rLeft, rRight)):
+            return lLeft.stableID == rLeft.stableID && lRight.stableID == rRight.stableID
         default: return false
         }
     }
@@ -76,6 +80,10 @@ extension DetailDestination {
             hasher.combine("person"); hasher.combine(id)
         case .company(let id, _):
             hasher.combine("company"); hasher.combine(id)
+        case .compare(let left, let right):
+            hasher.combine("compare")
+            hasher.combine(left.stableID)
+            hasher.combine(right.stableID)
         }
     }
 

@@ -233,6 +233,14 @@ struct LibraryView: View {
 
             Spacer(minLength: UI.Spacing.s2)
 
+            Button("对比") {
+                startCompare()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(selectedPairs.count != 2)
+            .help("选中恰好两部影视作品后并排对比")
+
             Button(kind.opposite == .watchlist ? "移到观看清单" : "移到收藏") {
                 moveSelected()
             }
@@ -355,6 +363,25 @@ struct LibraryView: View {
         guard let change = appEnv.library.removeItems(ids: selectedIDs, from: kind) else { return }
         ToastCenter.shared.show("已从\(kind.title)移出 \(change.snapshots.count) 部")
         endSelection()
+    }
+
+    /// 已选中的影视条目（按列表顺序），人物条目不参与对比。
+    private var selectedPairs: [MediaSummary] {
+        items
+            .filter { selectedIDs.contains($0.id) }
+            .map(\.asSummary)
+            .filter { $0.mediaKind == .movie || $0.mediaKind == .tv }
+    }
+
+    /// 恰好选中两部时进入对比页；顺序即列表顺序（左 = 靠前的那部）。
+    private func startCompare() {
+        let picked = selectedPairs
+        guard picked.count == 2 else { return }
+        endSelection()
+        NotificationCenter.default.post(
+            name: AppCommandBus.pushDetail,
+            object: DetailDestination.compare(left: picked[0], right: picked[1])
+        )
     }
 
     private func moveSelected() {
